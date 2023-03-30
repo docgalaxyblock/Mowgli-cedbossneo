@@ -57,6 +57,9 @@
 
 // Status message
 #include "mowgli/status.h"
+#include "mower_msgs/Status.h"
+#include "mower_msgs/MowerControlSrv.h"
+#include "mower_msgs/EmergencyStopSrv.h"
 
 
 #define MAX_MPS	  	0.6		 	// Allow maximum speed of 0.6 m/s 
@@ -119,11 +122,15 @@ mowgli::magnetometer imu_mag_calibration_msg;
 // mowgli status message
 mowgli::status status_msg;
 xbot_msgs::WheelTick wheel_ticks_msg;
+
+// om status message
+mower_msgs::Status om_mower_status;
 /*
  * PUBLISHERS
  */
 ros::Publisher pubButtonState("buttonstate", &buttonstate_msg);
 ros::Publisher pubStatus("mowgli/status", &status_msg);
+ros::Publisher pubOMStatus("mower/status", &om_mower_status);
 ros::Publisher pubWheelTicks("mower/wheel_ticks", &wheel_ticks_msg);
 
 // IMU onboard
@@ -149,22 +156,22 @@ ros::Subscriber<geometry_msgs::Twist> subCommandVelocity("cmd_vel", CommandVeloc
 // SERVICES
 void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res);
 void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res);
-void cbResetEmergency(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
+void cbSetEmergency(const mower_msgs::EmergencyStopSrvRequest &req, mower_msgs::EmergencyStopSrvResponse &res);
 void cbReboot(const std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
 void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
 #ifdef BLADEMOTOR_USART_ENABLED
-	void cbEnableMowerMotor(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
+	void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msgs::MowerControlSrvResponse &res);
 #endif
 
 ros::ServiceServer<mowgli::SetCfgRequest, mowgli::SetCfgResponse> svcSetCfg("mowgli/SetCfg", cbSetCfg);
 ros::ServiceServer<mowgli::GetCfgRequest, mowgli::GetCfgResponse> svcGetCfg("mowgli/GetCfg", cbGetCfg);
-ros::ServiceServer<std_srvs::SetBool::Request, std_srvs::SetBool::Response> svcResetEmergency("mowgli/ResetEmergency", cbResetEmergency);
+ros::ServiceServer<mower_msgs::EmergencyStopSrvRequest, mower_msgs::EmergencyStopSrvResponse> svcSetEmergency("mower_service/emergency", cbSetEmergency);
 ros::ServiceServer<std_srvs::Empty::Request, std_srvs::Empty::Response> svcReboot("mowgli/Reboot", cbReboot);
 ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcSetLed("mowgli/SetLed", cbSetLed);
 ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcClrLed("mowgli/ClrLed", cbClrLed);
 #ifdef BLADEMOTOR_USART_ENABLED
-	ros::ServiceServer<std_srvs::SetBool::Request, std_srvs::SetBool::Response> svcEnableMowerMotor("mowgli/EnableMowerMotor", cbEnableMowerMotor);
+	ros::ServiceServer<mower_msgs::MowerControlSrvRequest, mower_msgs::MowerControlSrvResponse> svcEnableMowerMotor("mower_service/mow_enabled", cbEnableMowerMotor);
 #endif
 
 /*
@@ -422,7 +429,7 @@ extern "C" void broadcast_handler()
 		imu_mag_calibration_msg.z = z;
 
 		imu_mag_msg.header.stamp = nh.now();
-		pubIMUMagCalibration.publish(&imu_mag_calibration_msg);		
+		//pubIMUMagCalibration.publish(&imu_mag_calibration_msg);		
 	  } // if (NBT_handler(&ext_imu_nbt))
 #endif
 
@@ -476,7 +483,29 @@ extern "C" void broadcast_handler()
 		status_msg.sw_ver_maj = MOWGLI_SW_VERSION_MAJOR;
 		status_msg.sw_ver_bra = MOWGLI_SW_VERSION_BRANCH;
 		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;
-		pubStatus.publish(&status_msg);		
+		//pubStatus.publish(&status_msg);		
+
+		om_mower_status.rain_detected = status_msg.rain_detected;
+		om_mower_status.emergency = status_msg.emergency_status;
+		/* not used anymore*/
+		if (status_msg.is_charging) {
+			om_mower_status.v_charge = 32.0;
+		} else {
+			om_mower_status.v_charge = 0.0;
+		}
+		om_mower_status.charge_current = status_msg.i_charge;
+		om_mower_status.v_battery = status_msg.v_battery;
+		om_mower_status.left_esc_status.current = status_msg.left_power;
+		om_mower_status.right_esc_status.current = status_msg.right_power;
+		om_mower_status.mow_esc_status.temperature_motor = status_msg.blade_temperature;
+		om_mower_status.mow_esc_status.tacho = status_msg.blade_RPM;
+		om_mower_status.mow_esc_status.current = status_msg.blade_power;
+		om_mower_status.mow_esc_status.status = status_msg.blade_motor_enabled;
+		om_mower_status.mow_esc_status.temperature_motor = status_msg.blade_temperature;
+		om_mower_status.left_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
+		om_mower_status.right_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
+
+		pubOMStatus.publish(&om_mower_status);
 	  } // if (NBT_handler(&status_nbt))
 }
 
@@ -633,19 +662,11 @@ void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res) {
  *  callback for mowgli/EnableMowerMotor Service
  */
 #ifdef BLADEMOTOR_USART_ENABLED
-	void cbEnableMowerMotor(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
+	void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msgs::MowerControlSrvResponse &res)
 	{	
 		last_cmd_blade = nh.now();	// if the last blade cmd is older than 25sec the motor will be stopped !
-		debug_printf("ROS: cbEnableMowerMotor(from %d to %d)", blade_on_off, req.data);	
-		blade_on_off = req.data;	
-		if (req.data) {        		
-			res.success = true;
-            res.message = "Blade Motor ON";
-		}
-		else {
-			res.success = true;
-            res.message = "Blade Motor OFF";
-		}    
+		debug_printf("ROS: cbEnableMowerMotor(from %d to %d)", blade_on_off, req.mow_enabled);	
+		blade_on_off = req.mow_enabled;	
 		debug_printf("[DONE]\r\n");
 	}
 #endif
@@ -653,17 +674,9 @@ void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res) {
 /*
  * callback for reset emergency state by remote
  */
-void cbResetEmergency(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
+void cbSetEmergency(const mower_msgs::EmergencyStopSrvRequest &req, mower_msgs::EmergencyStopSrvResponse &res)
 {
-    if(req.data){
-        Emergency_ResetState();
-        res.success = true;
-        res.message = "Emergency reset";
-    }
-    else{
-        res.success = false;
-        res.message = "Set to true to reset";
-    }
+	Emergency_SetState(req.emergency);
 }
 
 /*
@@ -710,26 +723,27 @@ extern "C" void init_ROS()
 #ifdef HAS_EXT_IMU	
 	nh.advertise(pubIMU);
 	nh.advertise(pubIMUMag);
-	nh.advertise(pubIMUMagCalibration);
+	//nh.advertise(pubIMUMagCalibration);
 #endif
     nh.advertise(pubWheelTicks);
 	nh.advertise(pubIMUOnboard);
 	//nh.advertise(pubIMUOnboardTemp);
-	nh.advertise(pubStatus);
+	//nh.advertise(pubStatus);
+	nh.advertise(pubOMStatus);
 	
 	// Initialize Subscribers
 	nh.subscribe(subCommandVelocity);
 
 	// Initialize Services	
-	nh.advertiseService(svcSetCfg);	  
-	nh.advertiseService(svcGetCfg);	  
+	//nh.advertiseService(svcSetCfg);	  
+	//nh.advertiseService(svcGetCfg);	  
 #ifdef BLADEMOTOR_USART_ENABLED	
     nh.advertiseService(svcEnableMowerMotor);
 #endif
-    nh.advertiseService(svcResetEmergency);
-	nh.advertiseService(svcReboot);
-    nh.advertiseService(svcSetLed);
-	nh.advertiseService(svcClrLed);
+    nh.advertiseService(svcSetEmergency);
+	//nh.advertiseService(svcReboot);
+    //nh.advertiseService(svcSetLed);
+	//nh.advertiseService(svcClrLed);
 	
 	// Initialize Timers
 	NBT_init(&publish_nbt, 1000);

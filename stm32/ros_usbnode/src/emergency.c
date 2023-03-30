@@ -45,9 +45,9 @@ uint8_t Emergency_State(void)
  * @brief Reset Emergency State bits
  * @retval none
  */
-void Emergency_ResetState(void)
+void Emergency_SetState(uint8_t new_emergency_state)
 {
-    emergency_state = 0;
+    emergency_state = new_emergency_state;
 }
 
 /**

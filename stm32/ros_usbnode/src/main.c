@@ -120,7 +120,7 @@ typedef enum{
 } ADC2_channelSelection_e;
 ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
 void adc2_SetChannel(ADC2_channelSelection_e channel);
-
+void ADC2_Init();
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
@@ -209,6 +209,7 @@ int main(void)
     LED_Init();
     debug_printf(" * LED initialized\r\n");
     TIM2_Init();
+    ADC2_Init();
     TIM3_Init();
     HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);    
     debug_printf(" * Timer3 (Beeper) initialized\r\n");
@@ -1391,4 +1392,55 @@ static void WATCHDOG_Refresh(void){
       DB_TRACE(" IWDG refresh error\n\r");
     #endif  /* DB_ACTIVE */
   }
+}
+
+
+void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
+
+  if(hadc == &ADC2_Handle){
+    uint16_t l_u16Rawdata = ADC2_Handle.Instance->DR;
+    float tmp;
+
+    switch (adc2_eChannelSelection)
+    {
+    case ADC2_CHANNEL_CURRENT:
+      tmp = (((float)l_u16Rawdata/4095.0f)*3.3f - 2.5f) * 100/12.0;
+      current = 0.8*tmp+0.2*current;
+      break;
+
+    case ADC2_CHANNEL_CHARGEVOLTAGE:
+      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*16;
+      chargerVoltage = 0.8*tmp+0.2*chargerVoltage;
+      break;
+    
+    case ADC2_CHANNEL_BATTERYVOLTAGE:
+      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
+      batteryVoltage = 0.4*tmp+0.6*batteryVoltage;
+      break;
+
+    case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
+      tmp = (l_u16Rawdata/4095.0f)*3.3f * (32/2);
+      chargerInputVoltage = 0.5*tmp+0.5*chargerInputVoltage;
+      break;
+
+    case ADC2_CHANNEL_PC2:
+      tmp = (l_u16Rawdata/4095.0f)*3.3f;
+      input_PC3 = 0.5*tmp+0.5*input_PC3;
+      break;
+
+    case ADC2_CHANNEL_MAX:
+    default:
+      /* should not get here */
+      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
+      batteryVoltage = 0.1*tmp+0.9*batteryVoltage;
+      break;
+  }
+
+  adc2_eChannelSelection++;
+  if(adc2_eChannelSelection == ADC2_CHANNEL_MAX)adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+  adc2_SetChannel(adc2_eChannelSelection);
+
+  HAL_ADC_Start_IT(&ADC2_Handle);
+  }
+
 }

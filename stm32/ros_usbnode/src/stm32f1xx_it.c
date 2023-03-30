@@ -65,13 +65,16 @@ extern UART_HandleTypeDef DRIVEMOTORS_USART_Handler;
 extern UART_HandleTypeDef BLADEMOTOR_USART_Handler; 
 extern PCD_HandleTypeDef hpcd_USB_FS;
 
-extern DMA_HandleTypeDef hdma_uart4_tx;
-/* DRIVE MOTOR */
+
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
-/* BLADE MOTOR */
 extern DMA_HandleTypeDef hdma_uart3_tx;
 extern DMA_HandleTypeDef hdma_uart3_rx;
+extern DMA_HandleTypeDef hdma_uart4_tx;
+extern DMA_HandleTypeDef hdma_uart4_rx;
+
+extern ADC_HandleTypeDef ADC2_Handle;
+
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -214,6 +217,13 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32f1xx.s).                    */
 /******************************************************************************/
 
+/**
+  * @brief This function handles ADC 1 & 2 global interrupt.
+  */
+  void ADC1_2_IRQHandler(void)
+  {
+    HAL_ADC_IRQHandler(&ADC2_Handle);
+  }
 
  
 /**
@@ -263,7 +273,7 @@ void SysTick_Handler(void)
   }
 
 /**
-  * @brief This function handles DMA1 channel2 global interrupt. (BLADE MOTOR UART)
+  * @brief This function handles DMA1 channel2 global interrupt.
   */
 void DMA1_Channel2_IRQHandler(void)
 {
@@ -271,7 +281,7 @@ void DMA1_Channel2_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles DMA1 channel3 global interrupt. (BLADE MOTOR UART)
+  * @brief This function handles DMA1 channel3 global interrupt.
   */
 void DMA1_Channel3_IRQHandler(void)
 {
@@ -306,6 +316,20 @@ void DMA1_Channel7_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel7_IRQn 1 */
 
   /* USER CODE END DMA1_Channel7_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA2 channel3 global interrupts.
+  */
+void DMA2_Channel3_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Channel3_IRQn 0 */
+  
+  /* USER CODE END DMA2_Channel3_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_uart4_rx);
+  /* USER CODE BEGIN DMA2_Channel3_IRQn 1 */
+
+  /* USER CODE END DMA2_Channel3_IRQn 1 */
 }
 
 /**
