@@ -15,10 +15,13 @@
 *******************************************************************************/
 #include <string.h>
 
+#include <stdlib.h>
+
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx_hal_uart.h"
 
 #include "main.h"
+#include "ros/ros_custom/cpp_main.h"
 #include "board.h"
 
 #include "drivemotor.h" 
@@ -39,7 +42,9 @@
 typedef enum {
     DRIVEMOTOR_INIT_1,
     DRIVEMOTOR_INIT_2,
-    DRIVEMOTOR_RUN
+    DRIVEMOTOR_RUN,
+    DRIVEMOTOR_BACKWARD,
+    DRIVEMOTOR_WAIT
 }DRIVEMOTOR_STATE_e;
 
 typedef struct 
@@ -53,7 +58,7 @@ typedef struct
     /* 8*/ uint16_t u16_ukndata0;
     /*10*/ uint8_t u8_left_power;
     /*11*/ uint8_t u8_right_power;
-    /*12*/ uint8_t u8_notused1;
+    /*12*/ uint8_t u8_error;
     /*13*/ uint16_t u16_left_ticks;
     /*15*/ uint16_t u16_right_ticks;
     /*17*/ uint8_t u8_left_ukn;
@@ -97,9 +102,19 @@ int16_t left_wheel_speed_val = 0;
 uint8_t right_power = 0;
 uint8_t left_power = 0;
     
+
+
+uint32_t DRIVEMOTOR_u32ErrorCnt = 0;
+
+static uint8_t left_speed_req;
+static uint8_t right_speed_req;
+static uint8_t left_dir_req;
+static uint8_t right_dir_req;
+
 /******************************************************************************
 * Function Prototypes
 *******************************************************************************/
+__STATIC_INLINE  void drivemotor_prepareMsg(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir);
 
 /******************************************************************************
 *  Public Functions
@@ -195,11 +210,22 @@ void DRIVEMOTOR_Init(void){
     HAL_NVIC_EnableIRQ(DRIVEMOTORS_USART_IRQ);   
 
     __HAL_UART_ENABLE_IT(&DRIVEMOTORS_USART_Handler, UART_IT_TC);
+
+    right_encoder_ticks = 0;
+    left_encoder_ticks = 0;
+    prev_left_direction = 0;
+    prev_right_direction = 0;
+    prev_right_encoder_val = 0;
+    prev_left_encoder_val = 0;
+    prev_right_wheel_speed_val = 0;
+    prev_left_wheel_speed_val = 0;
 }
 
 /// @brief handle drive motor messages
 /// @param  
 void DRIVEMOTOR_App_10ms(void){
+
+    static uint32_t l_u32Timestamp = 0;
 
     switch (drivemotor_eState)
     {
@@ -214,7 +240,27 @@ void DRIVEMOTOR_App_10ms(void){
             
             /* prepare to receive the message before to launch the command */
             HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
+
+            drivemotor_prepareMsg(left_speed_req, right_speed_req, left_dir_req, right_dir_req);
+            /* error State*/
+            if(drivemotor_psReceivedData.u8_error != 0){
+                drivemotor_prepareMsg(0,0,0,0);
+                DRIVEMOTOR_u32ErrorCnt++;
+            }
+
             HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
+
+            break;
+
+        case DRIVEMOTOR_WAIT:
+            /* prepare to receive the message before to launch the command */
+            HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
+            drivemotor_prepareMsg(0,0,0,0);
+            if( (HAL_GetTick() - l_u32Timestamp) > 1000){
+                drivemotor_eState = DRIVEMOTOR_RUN;
+            }
+            HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
+
             break;
         
         default:
@@ -284,6 +330,7 @@ void DRIVEMOTOR_App_Rx(void){
             /*
               Encoder value can reset to zero twice when changing direction
               2nd reset occurs when the speed changes from zero to non-zero
+              something the ticks are holded until the next commands
             */
            
             left_wheel_speed_val = left_direction * drivemotor_psReceivedData.u8_left_speed;
@@ -291,7 +338,7 @@ void DRIVEMOTOR_App_Rx(void){
             {
                 prev_left_encoder_val = 0;
             }
-            left_encoder_ticks += left_direction * (left_encoder_val - prev_left_encoder_val);
+            left_encoder_ticks +=  abs(left_direction)* (left_encoder_val - prev_left_encoder_val);
             prev_left_encoder_val = left_encoder_val;
             prev_left_wheel_speed_val = left_wheel_speed_val;
             prev_left_direction = left_direction;
@@ -301,12 +348,14 @@ void DRIVEMOTOR_App_Rx(void){
             {
                 prev_right_encoder_val = 0;
             }
-            right_encoder_ticks += right_direction * (right_encoder_val - prev_right_encoder_val);
+            right_encoder_ticks +=  abs(right_direction)*(right_encoder_val - prev_right_encoder_val);
             prev_right_encoder_val = right_encoder_val;
             prev_right_wheel_speed_val = right_wheel_speed_val;
             prev_right_direction = right_direction;
             
-            drivemotors_eRxFlag = RX_WAIT;                    // ready for next message      
+            wheelTicks_handler(left_direction, right_direction, left_encoder_ticks, right_encoder_ticks, left_wheel_speed_val, right_wheel_speed_val);
+
+            drivemotors_eRxFlag = RX_WAIT;                    // ready for next message
     }
 }
 
@@ -318,7 +367,43 @@ void DRIVEMOTOR_App_Rx(void){
 /// @param right_dir  left motor direction bit
 void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir)
 {
-    uint8_t direction = 0x0;            
+    left_speed_req  = left_speed;
+    right_speed_req = right_speed;
+    left_dir_req    = left_dir;
+    right_dir_req   = right_dir;
+}
+
+
+
+/// @brief drive motor receive interrupt handler
+/// @param
+void DRIVEMOTOR_ReceiveIT(void)
+{
+    /* decode the frame */
+    if(memcmp(drivemotor_pcu8Preamble,(uint8_t*)&drivemotor_psReceivedData,5) == 0){
+        uint8_t l_u8crc = crcCalc((uint8_t*)&drivemotor_psReceivedData,DRIVEMOTOR_LENGTH_RECEIVED_MSG-1);
+        if(drivemotor_psReceivedData.u8_CRC == l_u8crc )
+        {
+            drivemotors_eRxFlag = RX_VALID;
+        }
+        else
+        {
+            drivemotors_eRxFlag = RX_CRC_ERROR;
+        }
+    }
+    else
+    {
+         drivemotors_eRxFlag = RX_INVALID_ERROR;
+    }
+}
+
+/******************************************************************************
+*  Private Functions
+*******************************************************************************/
+
+__STATIC_INLINE  void  drivemotor_prepareMsg(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir){
+
+    uint8_t direction = 0x0;
 
     // calc direction bits
     if (right_dir == 1)
@@ -346,35 +431,8 @@ void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_d
     drivemotor_pu8RqstMessage[5] = direction;
     drivemotor_pu8RqstMessage[6] = left_speed;
     drivemotor_pu8RqstMessage[7] = right_speed;
-    drivemotor_pu8RqstMessage[9]= 0x00 ;
-    drivemotor_pu8RqstMessage[8] = 0x00;
-    drivemotor_pu8RqstMessage[10] = 0x00;
+    drivemotor_pu8RqstMessage[9]= 0;
+    drivemotor_pu8RqstMessage[8] = 0;
+    drivemotor_pu8RqstMessage[10] = 0;
     drivemotor_pu8RqstMessage[11] = crcCalc(drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG-1);
 }
-
-
-/// @brief drive motor receive interrupt handler
-/// @param  
-void DRIVEMOTOR_ReceiveIT(void)
-{    
-    /* decode the frame */
-    if(memcmp(drivemotor_pcu8Preamble,(uint8_t*)&drivemotor_psReceivedData,5) == 0){
-        uint8_t l_u8crc = crcCalc((uint8_t*)&drivemotor_psReceivedData,DRIVEMOTOR_LENGTH_RECEIVED_MSG-1);
-        if(drivemotor_psReceivedData.u8_CRC == l_u8crc )
-        {
-            drivemotors_eRxFlag = RX_VALID;                  
-        }
-        else
-        {
-            drivemotors_eRxFlag = RX_CRC_ERROR; 
-        }
-    }
-    else
-    {
-         drivemotors_eRxFlag = RX_INVALID_ERROR;
-    }  
-}
-
-/******************************************************************************
-*  Private Functions
-*******************************************************************************/

@@ -30,7 +30,7 @@
 *******************************************************************************/
 #define BLADEMOTOR_LENGTH_INIT_MSG 22
 #define BLADEMOTOR_LENGTH_RQST_MSG 7
-#define BLADEMOTOR_LENGTH_RECEIVED_MSG 16
+#define BLADEMOTOR_LENGTH_RECEIVED_MSG 14
 /******************************************************************************
 * Module Preprocessor Macros
 *******************************************************************************/
@@ -55,13 +55,13 @@ DMA_HandleTypeDef hdma_uart3_tx;
 static BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
 
 bool BLADEMOTOR_bActivated = false;
-uint16_t BLADEMOTOR_u16Counter1 = 0;
-uint16_t BLADEMOTOR_u16Counter2 = 0;
+uint16_t BLADEMOTOR_u16RPM = 0;
+uint16_t BLADEMOTOR_u16Power = 0;
 
 static uint8_t blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG] = {0};
-static uint8_t blademotor_pu8RqstMessage[BLADEMOTOR_LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xa2};
+static uint8_t blademotor_pu8RqstMessage[BLADEMOTOR_LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xA2};
 
-const uint8_t blademotor_pcu8Preamble[5]  = {0x55, 0xaa, 0xc, 0x2, 0xd0};
+const uint8_t blademotor_pcu8Preamble[5]  = {0x55,0xAA,0x0A,0x2,0xD0};
 const uint8_t blademotor_pcu8InitMsg[BLADEMOTOR_LENGTH_INIT_MSG] =  { 0x55, 0xaa, 0x12, 0x20, 0x80, 0x00, 0xac, 0x0d, 0x00, 0x02, 0x32, 0x50, 0x1e, 0x04, 0x00, 0x15, 0x21, 0x05, 0x0a, 0x19, 0x3c, 0xaa };
 /******************************************************************************
 * Function Prototypes
@@ -212,8 +212,8 @@ void BLADEMOTOR_ReceiveIT(void)
             else{
                 BLADEMOTOR_bActivated = false;
             }
-            BLADEMOTOR_u16Counter1 = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
-            BLADEMOTOR_u16Counter2 = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;           
+            BLADEMOTOR_u16RPM = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
+            BLADEMOTOR_u16Power = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;
         }
   
     }

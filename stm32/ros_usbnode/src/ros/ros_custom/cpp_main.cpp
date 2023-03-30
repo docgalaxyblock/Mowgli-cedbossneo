@@ -15,9 +15,9 @@
 
 
 #include "board.h"
+#include "main.h"
 
 #include <cpp_main.h>
-#include "main.h"
 #include "panel.h"
 #include "emergency.h"
 #include "drivemotor.h"
@@ -27,8 +27,6 @@
 #include "ringbuffer.h"
 #include "ros.h"
 #include "ros/time.h"
-#include "tf/tf.h"
-#include "tf/transform_broadcaster.h"
 #include "std_msgs/Bool.h"
 #include "std_msgs/String.h"
 #include "std_msgs/Float32.h"
@@ -47,8 +45,10 @@
 #include "imu/imu.h"
 #include "sensor_msgs/Imu.h"
 #include "sensor_msgs/MagneticField.h"
+#include "sensor_msgs/Range.h"
 #include "sensor_msgs/Temperature.h"
 #include "mowgli/magnetometer.h"
+#include <xbot_msgs/WheelTick.h>
 
 // Flash Configuration Services
 #include "mowgli/SetCfg.h"
@@ -74,7 +74,7 @@
 #define MOTORS_NBT_TIME_MS 100
 #define STATUS_NBT_TIME_MS 250
 
-extern uint8_t RxBuffer[RxBufferSize];
+uint8_t RxBuffer[RxBufferSize];
 struct ringbuffer rb;
 
 ros::Time last_cmd_vel(0, 0);
@@ -100,55 +100,10 @@ static uint8_t svcCfgDataBuffer[256];
 
 ros::NodeHandle nh;
 
-// odom message
-geometry_msgs::Quaternion quat;
-geometry_msgs::TransformStamped t;
-tf::TransformBroadcaster broadcaster;
-char base_link[] = "base_link_dr";
-char odom[] = "odom_dr";
-
-//double radius = 0.04;                              //Wheel radius, in m
-//double wheelbase = 0.187;                          //Wheelbase, in m
-double two_pi = 6.28319;
-double speed_act_left = 0.0;
-double speed_act_right = 0.0;
-
-double distance_left = 0.0;
-double distance_right = 0.0;
-//double speed_req1 = 0.0;
-//double speed_req2 = 0.0;
-//double speed_dt = 0.0;
-double x_pos = 0.0;
-double y_pos = 0.0;
-double theta = 0.0;
-ros::Time current_time;
-// ros::Time speed_time;
-// ---
-// double rate = 10.0;
-double linear_scale_positive = 1.0;
-double linear_scale_negative = 1.0;
-double angular_scale_positive = 1.0;
-double angular_scale_negative = 1.0;
-bool publish_tf = true; // publish odom -> base_link transform
-double dt = 0.0;
-double dx = 0.0;
-double dy = 0.0;
-double dth = 0.0;
-double dxy = 0.0;
-double vx = 0.0;
-double vy = 0.0;
-
-int32_t left_encoder_ticks_old  = 0;
-int32_t right_encoder_ticks_old = 0;
-
-ros::Time odom_last_time = nh.now();	// this is 0 because we have no time upon startup
-ros::Time odom_current_time;
-
 float imu_onboard_temperature; // cached temp value, so we dont poll I2C constantly
 
 
 std_msgs::Int16MultiArray buttonstate_msg;
-nav_msgs::Odometry odom_msg;
 
 // IMU
 // external IMU (i2c)
@@ -163,13 +118,13 @@ mowgli::magnetometer imu_mag_calibration_msg;
 
 // mowgli status message
 mowgli::status status_msg;
-
+xbot_msgs::WheelTick wheel_ticks_msg;
 /*
  * PUBLISHERS
  */
-ros::Publisher pubOdom("mowgli/odom", &odom_msg);
 ros::Publisher pubButtonState("buttonstate", &buttonstate_msg);
 ros::Publisher pubStatus("mowgli/status", &status_msg);
+ros::Publisher pubWheelTicks("mower/wheel_ticks", &wheel_ticks_msg);
 
 // IMU onboard
 ros::Publisher pubIMUOnboard("imu_onboard/data_raw", &imu_onboard_msg);
@@ -194,8 +149,8 @@ ros::Subscriber<geometry_msgs::Twist> subCommandVelocity("cmd_vel", CommandVeloc
 // SERVICES
 void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res);
 void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res);
+void cbResetEmergency(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
 void cbReboot(const std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
-void cbEnableTF(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
 void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
 void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
 #ifdef BLADEMOTOR_USART_ENABLED
@@ -204,8 +159,8 @@ void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
 
 ros::ServiceServer<mowgli::SetCfgRequest, mowgli::SetCfgResponse> svcSetCfg("mowgli/SetCfg", cbSetCfg);
 ros::ServiceServer<mowgli::GetCfgRequest, mowgli::GetCfgResponse> svcGetCfg("mowgli/GetCfg", cbGetCfg);
+ros::ServiceServer<std_srvs::SetBool::Request, std_srvs::SetBool::Response> svcResetEmergency("mowgli/ResetEmergency", cbResetEmergency);
 ros::ServiceServer<std_srvs::Empty::Request, std_srvs::Empty::Response> svcReboot("mowgli/Reboot", cbReboot);
-ros::ServiceServer<std_srvs::SetBool::Request, std_srvs::SetBool::Response> svcEnableTF("mowgli/EnableTF", cbEnableTF);
 ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcSetLed("mowgli/SetLed", cbSetLed);
 ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcClrLed("mowgli/ClrLed", cbClrLed);
 #ifdef BLADEMOTOR_USART_ENABLED
@@ -219,7 +174,6 @@ static nbt_t ros_nbt;
 static nbt_t publish_nbt;
 static nbt_t motors_nbt;
 static nbt_t panel_nbt;
-static nbt_t odom_nbt;
 static nbt_t onboard_imu_nbt;
 static nbt_t status_nbt;
 #ifdef HAS_EXT_IMU
@@ -255,18 +209,18 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist& msg)
 		{
 			left_mps = MAX_MPS;
 		}
-		else if (left_mps < -1*MAX_MPS)
+		else if (left_mps < -1.*MAX_MPS)
 		{
-			left_mps = -1*MAX_MPS;
+			left_mps = -1.*MAX_MPS;
 		}
 		// cap right motor speed to MAX_MPS
 		if (right_mps > MAX_MPS)
 		{
 			right_mps = MAX_MPS;
 		}
-		else if (right_mps < -1*MAX_MPS)
+		else if (right_mps < -1.*MAX_MPS)
 		{
-			right_mps = -1*MAX_MPS;
+			right_mps = -1.*MAX_MPS;
 		}
 
 		// set directions		
@@ -280,9 +234,10 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist& msg)
 	//	debug_printf("left_mps: %f (%c)  right_mps: %f (%c)\r\n", left_mps, left_dir?'F':'R', right_mps, right_dir?'F':'R');
 }
 
-extern "C" void cdc_receive_put(uint8_t value)
-{
-	ringbuffer_putchar(&rb, value);
+uint8_t CDC_DataReceivedHandler(const uint8_t *Buf, uint32_t len){
+
+	ringbuffer_put(&rb,Buf,len);
+	return CDC_RX_DATA_HANDLED;
 }
 
 
@@ -295,9 +250,9 @@ extern "C" void chatter_handler()
 	  {
 		 
 #ifdef IMU_ONBOARD_TEMP
-		  imu_onboard_temperature = IMU_Onboard_ReadTemp();
+		  imu_onboard_temperature = IMU_TempRaw();
 #else
-		  imu_onboard_temperature = -100;
+		  imu_onboard_temperature = IMU_Onboard_ReadTemp();
 #endif
 /*
 		  imu_onboard_temp_msg.variance = 0.5;		// 0.5°C resolution
@@ -371,6 +326,27 @@ extern "C" void panel_handler()
 			buttonupdated=0;
 		}
 	  }
+}
+
+/* \fn wheelTicks_handler
+* \brief Send wheelt tick to openmower by rosserial
+* is called when receiving the motors unit answer (every 20ms)
+*/
+extern "C" void wheelTicks_handler(int8_t p_u8LeftDirection,int8_t p_u8RightDirection, uint32_t p_u16LeftTicks, uint32_t p_u16RightTicks, int16_t p_s16LeftSpeed, int16_t p_s16RightSpeed){
+
+    wheel_ticks_msg.stamp = nh.now();
+    wheel_ticks_msg.wheel_tick_factor = TICKS_PER_M;
+    wheel_ticks_msg.valid_wheels = 0x0C;
+    wheel_ticks_msg.wheel_direction_fl = 0;
+    wheel_ticks_msg.wheel_ticks_fl = (int32_t)p_s16LeftSpeed;
+    wheel_ticks_msg.wheel_direction_fr = 0;
+    wheel_ticks_msg.wheel_ticks_fr = (int32_t)p_s16RightSpeed;
+    wheel_ticks_msg.wheel_direction_rl = (p_u8LeftDirection == -1)? 1 : 0;
+    wheel_ticks_msg.wheel_ticks_rl = p_u16LeftTicks;
+    wheel_ticks_msg.wheel_direction_rr = (p_u8RightDirection == -1)? 1 : 0;;
+    wheel_ticks_msg.wheel_ticks_rr = p_u16RightTicks;
+
+    pubWheelTicks.publish(&wheel_ticks_msg);
 }
 
 extern "C" void broadcast_handler()
@@ -475,6 +451,7 @@ extern "C" void broadcast_handler()
 		////////////////////////////////////////		
 		status_msg.stamp = nh.now();
 		status_msg.rain_detected = RAIN_Sense();
+        status_msg.emergency_status = Emergency_State();
 		status_msg.emergency_tilt_mech_triggered = Emergency_Tilt();
 		status_msg.emergency_tilt_accel_triggered = Emergency_LowZAccelerometer();
 		status_msg.emergency_left_wheel_lifted = Emergency_WheelLiftBlue();
@@ -488,161 +465,19 @@ extern "C" void broadcast_handler()
 		status_msg.charge_pwm = chargecontrol_pwm_val;
 		status_msg.is_charging = chargecontrol_is_charging;
 		status_msg.imu_temp = imu_onboard_temperature;
-		status_msg.blade_motor_ctrl_enabled = true;	// hardcoded for now
+	    status_msg.blade_motor_ctrl_enabled = blade_on_off;
 		status_msg.drive_motor_ctrl_enabled = true; // hardcoded for now
 		status_msg.blade_motor_enabled = BLADEMOTOR_bActivated;	// set by feedback from blademotor	
 		status_msg.left_power = left_power;	
 		status_msg.right_power = right_power; 
+    	status_msg.blade_power = BLADEMOTOR_u16Power;
+	    status_msg.blade_RPM = BLADEMOTOR_u16RPM;
+	    status_msg.blade_temperature = blade_temperature;
 		status_msg.sw_ver_maj = MOWGLI_SW_VERSION_MAJOR;
 		status_msg.sw_ver_bra = MOWGLI_SW_VERSION_BRANCH;
 		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;
 		pubStatus.publish(&status_msg);		
 	  } // if (NBT_handler(&status_nbt))
-
-	  if (NBT_handler(&odom_nbt))
-	  {	
-		/* first odom_nbt call sets our "odom_last_time" */
-		if (odom_last_time.nsec == 0 )						
-		{
-			odom_last_time = nh.now();		
-		}
-		else		
-		{	/* subsequent odom_nbts publish odom messages */		
-
-			/* dynamic dt calculation */
-			odom_current_time = nh.now();	
-			uint32_t odom_current_time_msec = odom_current_time.sec*1000 + odom_current_time.nsec/1000000.0;
-			uint32_t odom_last_time_msec = odom_last_time.sec*1000 + odom_last_time.nsec/1000000.0;			
-			dt = (odom_current_time_msec - odom_last_time_msec) / 1000.0;
-
-
-			speed_act_left = left_wheel_speed_val/PWM_PER_MPS;			// wheel speed in m/s
-			speed_act_right = right_wheel_speed_val/PWM_PER_MPS;		// wheel speed in m/s			
-
-			/* calculate distances from accumulating wheel encoder ticks */
-			if (left_encoder_ticks>=left_encoder_ticks_old)
-				distance_left = (left_encoder_ticks-left_encoder_ticks_old)/TICKS_PER_M;
-			else 
-				distance_left = -1.0 * (left_encoder_ticks_old-left_encoder_ticks)/TICKS_PER_M;
-			
-			if (right_encoder_ticks>right_encoder_ticks_old)			
-				distance_right = (right_encoder_ticks-right_encoder_ticks_old)/TICKS_PER_M;
-			else
-				distance_right = -1.0 * (right_encoder_ticks_old-right_encoder_ticks)/TICKS_PER_M;
-
-			// only continue with calculating an odom message if we are moving, 
-			// or 0.1 sec are elapsed since the last odom message was published
-			//if (distance_left != 0 || distance_right != 0 || dt > 0.05)
-			if (1)
-			{
-				odom_last_time = nh.now();
-
-				// debug_printf("left_encoder_ticks: (%d/%d) right_encoder_ticks: (%d/%d) distance_left: %f distance_right: %f\r\n", left_encoder_ticks, left_encoder_ticks_old, right_encoder_ticks, right_encoder_ticks_old, distance_left, distance_right);				
-				// dt = (ODOM_NBT_TIME_MS/1000.0);			
-				// 	debug_printf("left_encoder_val: %d right_encoder_val: %d dt: %f speed_act_left: %f speed_act_right: %f\r\n",left_encoder_val, right_encoder_val, dt, speed_act_left, speed_act_right);			
-			
-				dx = (distance_left+distance_right)/2.0;
-				dy = 0;
-
-				//	dxy = (speed_act_left+speed_act_right)*dt/2.0;
-				//	dth = - 1.0 * ((speed_act_right-speed_act_left)*dt)/WHEEL_BASE;
-
-				dth = - 1.0 * (distance_left-distance_right)/WHEEL_BASE;
-				
-				if (dth > 0) dth *= angular_scale_positive;
-				if (dth < 0) dth *= angular_scale_negative;
-
-				//if (dxy > 0) dxy *= linear_scale_positive;
-				//if (dxy < 0) dxy *= linear_scale_negative;
-				//	dx = cos(dth) * dxy;
-				//  dy = sin(dth) * dxy;
-
-				x_pos += (cos(theta) * dx - sin(theta) * dy);
-				y_pos += (sin(theta) * dx + cos(theta) * dy);
-
-				//	debug_printf("dx: %f x_pos: %f dth: %f\r\n", dx, x_pos, dth);		
-
-				theta += dth;
-				if(theta >= two_pi) theta -= two_pi;
-				if(theta <= -two_pi) theta += two_pi;
-
-				left_encoder_ticks_old = left_encoder_ticks;
-				right_encoder_ticks_old = right_encoder_ticks;
-
-				quat = tf::createQuaternionFromYaw(theta);
-				current_time = nh.now(); 
-
-				//////////////////////////////////////////////////
-				// odom transform (optional)
-				//////////////////////////////////////////////////
-				if(publish_tf) {
-					geometry_msgs::TransformStamped t;						
-					t.header.frame_id = odom;
-					t.child_frame_id = base_link;
-					t.transform.translation.x = x_pos;
-					t.transform.translation.y = y_pos;
-					t.transform.translation.z = 0.0;
-					t.transform.rotation = quat;
-					t.header.stamp = current_time;					
-					broadcaster.sendTransform(t);			
-				}
-				//////////////////////////////////////////////////
-				// odom message
-				//////////////////////////////////////////////////
-				odom_msg.header.stamp = current_time; 	
-				odom_msg.header.frame_id = odom;
-				odom_msg.pose.pose.position.x = x_pos;
-				odom_msg.pose.pose.position.y = y_pos;
-				odom_msg.pose.pose.position.z = 0.0;
-				odom_msg.pose.pose.orientation = quat;
-				if (speed_act_left == 0 && speed_act_right == 0)
-				{
-					odom_msg.pose.covariance[0] = 1e-9;
-					odom_msg.pose.covariance[7] = 1e-3;
-					odom_msg.pose.covariance[8] = 1e-9;
-					odom_msg.pose.covariance[14] = 1e6;
-					odom_msg.pose.covariance[21] = 1e6;
-					odom_msg.pose.covariance[28] = 1e6;
-					odom_msg.pose.covariance[35] = 1e-9;
-
-					odom_msg.twist.covariance[0] = 1e-9;
-					odom_msg.twist.covariance[7] = 1e-3;
-					odom_msg.twist.covariance[8] = 1e-9;
-					odom_msg.twist.covariance[14] = 1e6;
-					odom_msg.twist.covariance[21] = 1e6;
-					odom_msg.twist.covariance[28] = 1e6;
-					odom_msg.twist.covariance[35] = 1e-9;
-				}
-				else{
-					odom_msg.pose.covariance[0] = 1e-1;
-					odom_msg.pose.covariance[7] = 1e-1;
-					odom_msg.pose.covariance[8] = 0.0;
-					odom_msg.pose.covariance[14] = 1e6;
-					odom_msg.pose.covariance[21] = 1e6;
-					odom_msg.pose.covariance[28] = 1e6;
-					odom_msg.pose.covariance[35] = 1e3;
-					
-					odom_msg.twist.covariance[0] = 1e-3;
-					odom_msg.twist.covariance[7] = 1e-3;
-					odom_msg.twist.covariance[8] = 0.0;
-					odom_msg.twist.covariance[14] = 1e6;
-					odom_msg.twist.covariance[21] = 1e6;
-					odom_msg.twist.covariance[28] = 1e6;
-					odom_msg.twist.covariance[35] = 1e3;
-				}
-
-				vx = (dt == 0)?  0 : (speed_act_left+speed_act_right)/2.0;
-			//	vth = (dt == 0)? 0 : (speed_act_right-speed_act_left)/WHEEL_BASE;
-				odom_msg.child_frame_id = base_link;
-				odom_msg.twist.twist.linear.x = vx;
-				odom_msg.twist.twist.linear.y = 0.0;
-				odom_msg.twist.twist.angular.z = dth;
-				pubOdom.publish(&odom_msg);
-
-			
-		   } // movement detected or timeout
-		} // first odom_last_time > 0
-	  } // if (NBT_handler(&broadcast_nbt))
 }
 
 /*
@@ -795,22 +630,6 @@ void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res) {
 }
 
 /*
- *  callback for mowgli/EnableTF Service
- */
-void cbEnableTF(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
-{
-	publish_tf = req.data;
-    if (req.data) {        		
-        res.success = true;
-        res.message = "cbEnableTF: publishing transform activated";
-    }
-    else {
-        res.success = false;
-        res.message = "cbEnableTF: publishing transform de-activated";
-    }    
-}
-
-/*
  *  callback for mowgli/EnableMowerMotor Service
  */
 #ifdef BLADEMOTOR_USART_ENABLED
@@ -821,15 +640,31 @@ void cbEnableTF(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Respon
 		blade_on_off = req.data;	
 		if (req.data) {        		
 			res.success = true;
-			res.message = "";
+            res.message = "Blade Motor ON";
 		}
 		else {
 			res.success = true;
-			res.message = "";
+            res.message = "Blade Motor OFF";
 		}    
 		debug_printf("[DONE]\r\n");
 	}
 #endif
+
+/*
+ * callback for reset emergency state by remote
+ */
+void cbResetEmergency(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
+{
+    if(req.data){
+        Emergency_ResetState();
+        res.success = true;
+        res.message = "Emergency reset";
+    }
+    else{
+        res.success = false;
+        res.message = "Set to true to reset";
+    }
+}
 
 /*
  *  callback for mowgli/Reboot Service
@@ -861,15 +696,11 @@ extern "C" void init_ROS()
 	// Initialize ROS
 	nh.initNode();
 
-	// Initialize TF Broadcaster
-	broadcaster.init(nh);
-
 	// Initialize Pubs
 	//nh.advertise(pubBatteryVoltage);
 	//nh.advertise(pubChargeVoltage);
 	//nh.advertise(pubChargeCurrent);
 	//nh.advertise(pubChargePWM);
-	nh.advertise(pubOdom);
 
 	//nh.advertise(pubBladeState);
 	//nh.advertise(pubChargeingState);
@@ -881,7 +712,8 @@ extern "C" void init_ROS()
 	nh.advertise(pubIMUMag);
 	nh.advertise(pubIMUMagCalibration);
 #endif
-	nh.advertise(pubIMUOnboard);	
+    nh.advertise(pubWheelTicks);
+	nh.advertise(pubIMUOnboard);
 	//nh.advertise(pubIMUOnboardTemp);
 	nh.advertise(pubStatus);
 	
@@ -893,9 +725,9 @@ extern "C" void init_ROS()
 	nh.advertiseService(svcGetCfg);	  
 #ifdef BLADEMOTOR_USART_ENABLED	
     nh.advertiseService(svcEnableMowerMotor);
-#endif	
+#endif
+    nh.advertiseService(svcResetEmergency);
 	nh.advertiseService(svcReboot);
-	nh.advertiseService(svcEnableTF);
     nh.advertiseService(svcSetLed);
 	nh.advertiseService(svcClrLed);
 	
@@ -909,6 +741,5 @@ extern "C" void init_ROS()
 	NBT_init(&onboard_imu_nbt, ONBOARD_IMU_NBT_TIME_MS);
 
 	NBT_init(&motors_nbt, MOTORS_NBT_TIME_MS);
-	NBT_init(&odom_nbt, ODOM_NBT_TIME_MS);
 	NBT_init(&ros_nbt, 10);	
 }

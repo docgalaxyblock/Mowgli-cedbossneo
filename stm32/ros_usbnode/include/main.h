@@ -50,6 +50,25 @@ typedef enum {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+#define max(a,b)             \
+({                           \
+    __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a > _b ? _a : _b;       \
+})
+
+#define min(a,b)             \
+({                           \
+    __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a < _b ? _a : _b;       \
+})
+
+
+#define DB_ACTIVE 1
+#define DB_TRACE(...)\
+            do { if (DB_ACTIVE) debug_printf( __VA_ARGS__); } while (0)
+
 void ADC_Test();
 float ADC_BatteryVoltage(uint8_t adc_conversions);
 float ADC_ChargeVoltage(uint8_t adc_conversions);
@@ -66,6 +85,7 @@ void chirp(uint8_t count);
 extern float battery_voltage;
 extern float charge_voltage;
 extern float charge_current;
+extern float blade_temperature;
 extern uint16_t  chargecontrol_pwm_val;
 extern uint8_t   chargecontrol_is_charging;
 extern uint8_t do_chirp;
@@ -95,6 +115,7 @@ void BLADEMOTOR_USART_Init();
 void SystemClock_Config();
 void ADC1_Init(void);
 void TIM1_Init(void);
+void TIM2_Init(void);
 void TIM3_Init(void);
 void MX_DMA_Init(void);
 void Emergency_Init(void);

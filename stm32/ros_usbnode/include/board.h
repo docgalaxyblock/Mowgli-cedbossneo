@@ -11,7 +11,7 @@ extern "C" {
 // this is the sofware version that any other Mowgli components like MowgliRover will match against
 
 #define MOWGLI_SW_VERSION_MAJOR              1
-#define MOWGLI_SW_VERSION_BRANCH             0              /* even = stable, odd = testing/unstable */
+#define MOWGLI_SW_VERSION_BRANCH             11              /* even = stable, odd = testing/unstable */
 #define MOWGLI_SW_VERSION_MINOR              2
 
 
@@ -46,24 +46,28 @@ extern "C" {
     // #define HAS_ULTRASONIC_SENSOR               1
 
     /// nominal max charge current is 1 Amp
-    #define MAX_CHARGE_CURRENT                  1.0
+    #define MAX_CHARGE_CURRENT                  1.0f
+    /// limite voltag when switching in 150mA mode
+    #define LIMIT_VOLTAGE_150MA                 29.0f
+    /// Max voltage allowed 29.4
+    #define MAX_CHARGE_VOLTAGE                 29.0f
+    ///We consider the battery is full when in CV mode the current below 0.1A
+    #define CHARGE_END_LIMIT_CURRENT            0.08f
     // if voltage is greater than this assume we are docked
-    #define MIN_CHARGE_VOLTAGE                  5.0
+    #define MIN_DOCKED_VOLTAGE                  20.0f
+    // if voltage is lower this assume battery is disconnected
+    #define MIN_BATTERY_VOLTAGE                  5.0f
     // must provide at least MIN_CHARGE_VOLTAGE when docked
     #define MIN_CHARGE_PWM                      500
     // if current is greater than this assume the battery is charging
-    #define MIN_CHARGE_CURRENT                  0.2
-    #define LOW_BAT_THRESHOLD                   23.5
-
-    // when the battery voltage reaches this we stop charging
-    #define BAT_CHARGE_CUTOFF_VOLTAGE           28.80
-    // maximum voltage that we will ever supply to the battery
-    #define MAX_CHARGE_VOLTAGE                  29.4
+    #define MIN_CHARGE_CURRENT                  0.1f
+    #define LOW_BAT_THRESHOLD                   25.2f /* near 20% SOC */
+    #define LOW_CRI_THRESHOLD                   23.5f /* near 0% SOC */
 
     // Emergency sensor timeouts
-    #define WHEEL_LIFT_EMERGENCY_MILLIS         500
+    #define WHEEL_LIFT_EMERGENCY_MILLIS         1000
     #define TILT_EMERGENCY_MILLIS               500      // used for both the mechanical and accelerometer based detection
-    #define STOP_BUTTON_EMERGENCY_MILLIS        20
+    #define STOP_BUTTON_EMERGENCY_MILLIS        100
     #define PLAY_BUTTON_CLEAR_EMERGENCY_MILLIS  2000
     #define IMU_ONBOARD_INCLINATION_THRESHOLD   0x38     // stock firmware uses 0x2C (way more allowed inclination)
 
