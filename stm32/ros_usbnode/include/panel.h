@@ -81,6 +81,7 @@ void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command);
 
 extern uint16_t buttonstate[PANEL_BUTTON_BYTES];
 extern uint8_t buttonupdated;
+extern uint8_t buttoncleared;
 
 extern uint8_t Led_States[LED_STATE_SIZE];
 

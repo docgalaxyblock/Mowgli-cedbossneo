@@ -149,6 +149,17 @@ extern "C" {
 
     /* Panel Buttons published in /button_state rostopic via Serial */
     #define PANEL_BUTTON_BYTES 12
+    #define PANEL_BUTTON_DEF_S1 1
+    #define PANEL_BUTTON_DEF_S2 2
+    #define PANEL_BUTTON_DEF_LOCK 3
+    #define PANEL_BUTTON_DEF_OK 4
+    #define PANEL_BUTTON_DEF_MON 5
+    #define PANEL_BUTTON_DEF_TUE 6
+    #define PANEL_BUTTON_DEF_WED 7
+    #define PANEL_BUTTON_DEF_THU 8
+    #define PANEL_BUTTON_DEF_FRI 9
+    #define PANEL_BUTTON_DEF_SAT 10
+    #define PANEL_BUTTON_DEF_SUN 11
     /* Byte Mapping of Bytes 5-16
       0     1     2     3     4     5     6     7     8     9     10    11    12    13    14    15    16
       

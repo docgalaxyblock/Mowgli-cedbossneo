@@ -47,19 +47,14 @@
 #include "sensor_msgs/MagneticField.h"
 #include "sensor_msgs/Range.h"
 #include "sensor_msgs/Temperature.h"
-#include "mowgli/magnetometer.h"
 #include <xbot_msgs/WheelTick.h>
 
-// Flash Configuration Services
-#include "mowgli/SetCfg.h"
-#include "mowgli/GetCfg.h"
-#include "mowgli/Led.h"
-
 // Status message
-#include "mowgli/status.h"
 #include "mower_msgs/Status.h"
 #include "mower_msgs/MowerControlSrv.h"
 #include "mower_msgs/EmergencyStopSrv.h"
+#include "mower_msgs/HighLevelControlSrv.h"
+#include "mower_msgs/HighLevelStatus.h"
 
 
 #define MAX_MPS	  	0.6		 	// Allow maximum speed of 0.6 m/s 
@@ -99,38 +94,26 @@ static uint8_t right_dir=0;
 	static uint8_t blade_on_off=0;
 #endif
 
-static uint8_t svcCfgDataBuffer[256];
-
 ros::NodeHandle nh;
 
 float imu_onboard_temperature; // cached temp value, so we dont poll I2C constantly
 
 
-std_msgs::Int16MultiArray buttonstate_msg;
-
 // IMU
 // external IMU (i2c)
 sensor_msgs::Imu imu_msg;
-sensor_msgs::MagneticField imu_mag_msg;
 // onboard IMU (accelerometer and temp)
 sensor_msgs::Imu imu_onboard_msg;
 //sensor_msgs::Temperature imu_onboard_temp_msg;
 
-//sensor_msgs::MagneticField imu_mag_calibration_msg;
-mowgli::magnetometer imu_mag_calibration_msg;
-
-// mowgli status message
-mowgli::status status_msg;
 xbot_msgs::WheelTick wheel_ticks_msg;
 
 // om status message
-mower_msgs::Status om_mower_status;
+mower_msgs::Status om_mower_status_msg;
 /*
  * PUBLISHERS
  */
-ros::Publisher pubButtonState("buttonstate", &buttonstate_msg);
-ros::Publisher pubStatus("mowgli/status", &status_msg);
-ros::Publisher pubOMStatus("mower/status", &om_mower_status);
+ros::Publisher pubOMStatus("mower/status", &om_mower_status_msg);
 ros::Publisher pubWheelTicks("mower/wheel_ticks", &wheel_ticks_msg);
 
 // IMU onboard
@@ -138,42 +121,29 @@ ros::Publisher pubIMUOnboard("imu_onboard/data_raw", &imu_onboard_msg);
 
 // IMU external
 ros::Publisher pubIMU("imu/data_raw", &imu_msg);
-ros::Publisher pubIMUMag("imu/mag", &imu_mag_msg);
-ros::Publisher pubIMUMagCalibration("imu/mag_calibration", &imu_mag_calibration_msg);
-
 
 /*
  * SUBSCRIBERS
  */
 extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist& msg);
+extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatus& msg);
 ros::Subscriber<geometry_msgs::Twist> subCommandVelocity("cmd_vel", CommandVelocityMessageCb);
-
-// TODO ros::Subscriber<std_msgs::Bool> subLEDSet("cmd_panel_led_set", CommandLEDSetMessageCb);
-// TODO ros::Subscriber<std_msgs::Bool> subLEDFlashSlow("cmd_panel_led_flash_slow", CommandLEDFlashSlowMessageCb);
-// TODO ros::Subscriber<std_msgs::Bool> subLEDFlashFast("cmd_panel_led_flash_fast", CommandLEDFlashFastMessageCb);
-// TODO ros::Subscriber<std_msgs::Bool> subLEDClear("cmd_panel_led_clear", CommandLEDClearMessageCb);
+ros::Subscriber<mower_msgs::HighLevelStatus> subCommandHighLevelStatus("mower_logic/current_state", CommandHighLevelStatusMessageCb);
 
 // SERVICES
-void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res);
-void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res);
 void cbSetEmergency(const mower_msgs::EmergencyStopSrvRequest &req, mower_msgs::EmergencyStopSrvResponse &res);
 void cbReboot(const std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
-void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
-void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
+void cbHighLevelControl(const mower_msgs::HighLevelControlSrvRequest &req, mower_msgs::HighLevelControlSrvResponse &res);
 #ifdef BLADEMOTOR_USART_ENABLED
 	void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msgs::MowerControlSrvResponse &res);
 #endif
 
-ros::ServiceServer<mowgli::SetCfgRequest, mowgli::SetCfgResponse> svcSetCfg("mowgli/SetCfg", cbSetCfg);
-ros::ServiceServer<mowgli::GetCfgRequest, mowgli::GetCfgResponse> svcGetCfg("mowgli/GetCfg", cbGetCfg);
 ros::ServiceServer<mower_msgs::EmergencyStopSrvRequest, mower_msgs::EmergencyStopSrvResponse> svcSetEmergency("mower_service/emergency", cbSetEmergency);
 ros::ServiceServer<std_srvs::Empty::Request, std_srvs::Empty::Response> svcReboot("mowgli/Reboot", cbReboot);
-ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcSetLed("mowgli/SetLed", cbSetLed);
-ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcClrLed("mowgli/ClrLed", cbClrLed);
 #ifdef BLADEMOTOR_USART_ENABLED
 	ros::ServiceServer<mower_msgs::MowerControlSrvRequest, mower_msgs::MowerControlSrvResponse> svcEnableMowerMotor("mower_service/mow_enabled", cbEnableMowerMotor);
 #endif
-
+ros::ServiceClient<mower_msgs::HighLevelControlSrvRequest, mower_msgs::HighLevelControlSrvResponse> svcHighLevelControl("mower_service/high_level_control");
 /*
  * NON BLOCKING TIMERS
  */
@@ -191,6 +161,14 @@ static nbt_t status_nbt;
  * reboot flag, if true we reboot after next publish_nbt
  */
 static bool reboot_flag = false;
+
+extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatus& msg){
+	if (msg.gps_quality_percent < 0.9) {
+		PANEL_Set_LED(PANEL_LED_MON, PANEL_LED_OFF);
+	} else {
+		PANEL_Set_LED(PANEL_LED_MON, PANEL_LED_ON);
+	}
+}
 
 /*
  * receive and parse cmd_vel messages
@@ -322,14 +300,27 @@ extern "C" void panel_handler()
 	  if (NBT_handler(&panel_nbt))
 	  {			  
 		PANEL_Tick();
-		if (buttonupdated == 1)
+		if (buttonupdated == 1 && buttoncleared == 0)
 		{
 			debug_printf("ROS: panel_nbt() - buttonstate changed\r\n");
-			buttonstate_msg.data = (int16_t*) malloc(sizeof(int16_t) * PANEL_BUTTON_BYTES);
-			buttonstate_msg.data_length = PANEL_BUTTON_BYTES;
-			memcpy(buttonstate_msg.data,buttonstate,sizeof(int16_t) * PANEL_BUTTON_BYTES);
-			pubButtonState.publish(&buttonstate_msg);		
-			free(buttonstate_msg.data);
+			mower_msgs::HighLevelControlSrvRequest highControlRequest;
+			mower_msgs::HighLevelControlSrvResponse highControlResponse;
+			if (buttonstate[PANEL_BUTTON_DEF_S1]) {
+				highControlRequest.command = mower_msgs::HighLevelControlSrvRequest::COMMAND_S1;
+			}
+			if (buttonstate[PANEL_BUTTON_DEF_S2]) {
+				highControlRequest.command = mower_msgs::HighLevelControlSrvRequest::COMMAND_S2;
+			}
+			if (buttonstate[PANEL_BUTTON_DEF_LOCK]) {
+				highControlRequest.command = mower_msgs::HighLevelControlSrvRequest::COMMAND_RESET_EMERGENCY;
+			}
+			if (buttonstate[PANEL_BUTTON_DEF_SUN]) {
+				highControlRequest.command = mower_msgs::HighLevelControlSrvRequest::COMMAND_DELETE_MAPS;
+			}
+			if (buttonstate[PANEL_BUTTON_DEF_OK]) {
+				highControlRequest.command = mower_msgs::HighLevelControlSrvRequest::COMMAND_START;
+			}
+			svcHighLevelControl.call(highControlRequest, highControlResponse);
 			buttonupdated=0;
 		}
 	  }
@@ -400,36 +391,6 @@ extern "C" void broadcast_handler()
 #endif		
 		imu_msg.header.stamp = nh.now();
 		pubIMU.publish(&imu_msg);
-
-		/**********************************/
-		/* Exernal Magnetometer Corrected */
-		/**********************************/
-		double x,y,z;	
-
-		// Orientation (Magnetometer)
-		imu_mag_msg.header.frame_id = "imu";								
-	 	IMU_ReadMagnetometer(&x, &y, &z);
-		imu_mag_msg.magnetic_field.x = x;
-		imu_mag_msg.magnetic_field.y = y;
-		imu_mag_msg.magnetic_field.z = z;
-
-		// covariance is fixed for now
-		imu_mag_msg.magnetic_field_covariance[0] = 1e-3;
-		imu_mag_msg.magnetic_field_covariance[4] = 1e-3;
-		imu_mag_msg.magnetic_field_covariance[8] = 1e-3;
-		imu_mag_msg.header.stamp = nh.now();
-		pubIMUMag.publish(&imu_mag_msg);
-
-		/******************************************/
-		/* Exernal Magnetometer RAW (Calibration) */
-		/******************************************/
-		IMU_ReadMagnetometerRaw(&x, &y, &z);
-		imu_mag_calibration_msg.x = x;
-		imu_mag_calibration_msg.y = y;
-		imu_mag_calibration_msg.z = z;
-
-		imu_mag_msg.header.stamp = nh.now();
-		//pubIMUMagCalibration.publish(&imu_mag_calibration_msg);		
 	  } // if (NBT_handler(&ext_imu_nbt))
 #endif
 
@@ -456,7 +417,7 @@ extern "C" void broadcast_handler()
 		////////////////////////////////////////
 		// mowgli/status Message
 		////////////////////////////////////////		
-		status_msg.stamp = nh.now();
+		/*status_msg.stamp = nh.now();
 		status_msg.rain_detected = RAIN_Sense();
         status_msg.emergency_status = Emergency_State();
 		status_msg.emergency_tilt_mech_triggered = Emergency_Tilt();
@@ -482,180 +443,30 @@ extern "C" void broadcast_handler()
 	    status_msg.blade_temperature = blade_temperature;
 		status_msg.sw_ver_maj = MOWGLI_SW_VERSION_MAJOR;
 		status_msg.sw_ver_bra = MOWGLI_SW_VERSION_BRANCH;
-		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;
+		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;*/
 		//pubStatus.publish(&status_msg);		
 
-		om_mower_status.rain_detected = status_msg.rain_detected;
-		om_mower_status.emergency = status_msg.emergency_status;
+		om_mower_status_msg.rain_detected = RAIN_Sense();
+		om_mower_status_msg.emergency = Emergency_State();
 		/* not used anymore*/
-		if (status_msg.is_charging) {
-			om_mower_status.v_charge = 32.0;
+		if (chargecontrol_is_charging) {
+			om_mower_status_msg.v_charge = 32.0;
 		} else {
-			om_mower_status.v_charge = 0.0;
+			om_mower_status_msg.v_charge = 0.0;
 		}
-		om_mower_status.charge_current = status_msg.i_charge;
-		om_mower_status.v_battery = status_msg.v_battery;
-		om_mower_status.left_esc_status.current = status_msg.left_power;
-		om_mower_status.right_esc_status.current = status_msg.right_power;
-		om_mower_status.mow_esc_status.temperature_motor = status_msg.blade_temperature;
-		om_mower_status.mow_esc_status.tacho = status_msg.blade_RPM;
-		om_mower_status.mow_esc_status.current = status_msg.blade_power;
-		om_mower_status.mow_esc_status.status = status_msg.blade_motor_enabled;
-		om_mower_status.mow_esc_status.temperature_motor = status_msg.blade_temperature;
-		om_mower_status.left_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
-		om_mower_status.right_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
+		om_mower_status_msg.charge_current = charge_current;
+		om_mower_status_msg.v_battery = battery_voltage;
+		om_mower_status_msg.left_esc_status.current = left_power;
+		om_mower_status_msg.right_esc_status.current = right_power;
+		om_mower_status_msg.mow_esc_status.temperature_motor = blade_temperature;
+		om_mower_status_msg.mow_esc_status.tacho = BLADEMOTOR_u16RPM;
+		om_mower_status_msg.mow_esc_status.current = BLADEMOTOR_u16Power;
+		om_mower_status_msg.mow_esc_status.status = BLADEMOTOR_bActivated;
+		om_mower_status_msg.left_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
+		om_mower_status_msg.right_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 
-		pubOMStatus.publish(&om_mower_status);
+		pubOMStatus.publish(&om_mower_status_msg);
 	  } // if (NBT_handler(&status_nbt))
-}
-
-/*
- *  callback for mowgli/GetCfg Service
- */
-void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res) 
-{	
-    debug_printf("cbGetCfg:\r\n");	
-	debug_printf(" name: %s\r\n", req.name);
-
-	res.data_length = SPIFLASH_ReadCfgValue(req.name, &res.type, svcCfgDataBuffer);
-
-	if (res.data_length > 0)
-	{		
-		res.data = (uint8_t*)&svcCfgDataBuffer;	
-		res.status = 1;
-	}
-	else
-	{
-		res.status = 0;
-	}
-}
-
-/// @brief Set Led and optionally reset all other Leds (0x40) + Chirp (0x80)
-/// @param req req.led the LED number and any option flags
-/// @param res 
-void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res)
-{	
- //  debug_printf("cbSetLed:\r\n");
- //  debug_printf(" led: %d\r\n", req.led);
-   uint8_t v=req.led;
-   if ( (req.led & 0x40) == 0x40)	// clear all Leds
-   {
-		for (uint8_t i=0;i<LED_STATE_SIZE;i++)
-		{
-			PANEL_Set_LED(i, PANEL_LED_OFF);
-		}
-   }  
-   if ( (req.led & 0x80) == 0x80)
-   {
-     do_chirp = 1;
-   }
-
-   // remove flag bits, turn on led
-   v &= ~(1UL<<7);
-   v &= ~(1UL<<6);
-   PANEL_Set_LED(v, PANEL_LED_ON);
-}
-
-/// @brief Clear Led and optionally reset all other Leds (0x40) + Chirp (0x80)
-/// @param req req.led the LED number and any option flags
-/// @param res 
-void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res)
-{	
- //  debug_printf("cbClrLed:\r\n");
- //  debug_printf(" led: %d\r\n", req.led);
-   uint8_t v=req.led;
-   if ( (req.led & 0x40) == 0x40)	// clear all Leds
-   {
-		for (uint8_t i=0;i<LED_STATE_SIZE;i++)
-		{
-			PANEL_Set_LED(i, PANEL_LED_OFF);
-		}
-   }  
-   if ( (req.led & 0x80) == 0x80)
-   {
-     do_chirp = 1;
-   }
- 
-   // remove flag bits, turn of led
-   v &= ~(1UL<<7);
-   v &= ~(1UL<<6);
-   PANEL_Set_LED(v, PANEL_LED_OFF);
-}
-
-
-/*
- *  callback for mowgli/SetCfg Service
- */
-void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res) {
-	union {
-		float f;
-		uint8_t b[4];
-	} float_val;
-
-	union {
-		double d;
-		uint8_t b[8];
-	} double_val;
-	uint8_t i;
-
-    debug_printf("cbSetCfg:\r\n");
-	debug_printf(" type: %d\r\n", req.type);
-	debug_printf(" len: %d\r\n", req.data_length);
-	debug_printf(" name: %s\r\n", req.name);
-
-	if (req.type == 0) // TYPE_INT32 (0)
-	{
-		int32_t int32_val = (req.data[0]) + (req.data[1]<<8) + (req.data[2]<<16) + (req.data[3]<<24);
-		debug_printf("(int32) data: %d\r\n", int32_val);			
-	}
-	if (req.type == 1) // TYPE_UINT32 (1)
-	{
-		uint32_t uint32_val = (req.data[0]) + (req.data[1]<<8) + (req.data[2]<<16) + (req.data[3]<<24);
-		debug_printf("(uint32) data: %d\r\n", uint32_val);			
-	}
-	if (req.type == 2) // TYPE_FLOAT (2)
-	{		
-		for (i=0;i<4;i++)
-		{
-			float_val.b[i] = req.data[i];
-		}		
-		debug_printf("(float) data: %f\r\n", float_val.f);					
-	}
-	if (req.type == 3)  // TYPE_DOUBLE (3)
-	{		
-		for (i=0;i<8;i++)
-		{
-			double_val.b[i] = req.data[i];
-		}
-		debug_printf("(double) data: %Lf\r\n", double_val.d);			
-	}
-	if (req.type == 4)	// TYPE_STRING (4)
-	{	
-		debug_printf("(string) data: '");				
-		for (i=0;i<req.data_length;i++)
-		{
-			debug_printf("%c", req.data[i]);
-		}
-		debug_printf("'\r\n");	
-	}
-	if (req.type == 5)	// TYPE_BARRAY (5)
-	{	
-		debug_printf("(byte array) data: '");				
-		for (i=0;i<req.data_length;i++)
-		{
-			debug_printf("0x%02x ", req.data[i]);
-		}
-		debug_printf("'\r\n");	
-	}
-
-	// debug print data[] array
-	for (i=0;i<req.data_length;i++)
-	{
-		debug_printf(" data[%d]: %d\r\n", i, req.data[i]);	
-	}		
-
-	SPIFLASH_WriteCfgValue(req.name, req.type, req.data_length, req.data);
-	res.status = 1;
 }
 
 /*
@@ -710,40 +521,24 @@ extern "C" void init_ROS()
 	nh.initNode();
 
 	// Initialize Pubs
-	//nh.advertise(pubBatteryVoltage);
-	//nh.advertise(pubChargeVoltage);
-	//nh.advertise(pubChargeCurrent);
-	//nh.advertise(pubChargePWM);
-
-	//nh.advertise(pubBladeState);
-	//nh.advertise(pubChargeingState);
-	//nh.advertise(pubLeftEncoderTicks);
-	//nh.advertise(pubRightEncoderTicks);
-	nh.advertise(pubButtonState);
 #ifdef HAS_EXT_IMU	
 	nh.advertise(pubIMU);
-	nh.advertise(pubIMUMag);
-	//nh.advertise(pubIMUMagCalibration);
 #endif
     nh.advertise(pubWheelTicks);
 	nh.advertise(pubIMUOnboard);
-	//nh.advertise(pubIMUOnboardTemp);
-	//nh.advertise(pubStatus);
 	nh.advertise(pubOMStatus);
 	
 	// Initialize Subscribers
 	nh.subscribe(subCommandVelocity);
+	nh.subscribe(subCommandHighLevelStatus);
 
 	// Initialize Services	
-	//nh.advertiseService(svcSetCfg);	  
-	//nh.advertiseService(svcGetCfg);	  
 #ifdef BLADEMOTOR_USART_ENABLED	
     nh.advertiseService(svcEnableMowerMotor);
 #endif
     nh.advertiseService(svcSetEmergency);
-	//nh.advertiseService(svcReboot);
-    //nh.advertiseService(svcSetLed);
-	//nh.advertiseService(svcClrLed);
+	nh.advertiseService(svcReboot);
+	nh.serviceClient(svcHighLevelControl);
 	
 	// Initialize Timers
 	NBT_init(&publish_nbt, 1000);
