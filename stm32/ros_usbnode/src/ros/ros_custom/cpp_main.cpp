@@ -278,7 +278,7 @@ extern "C" void motors_handler()
 			}
 #ifdef BLADEMOTOR_USART_ENABLED
 			// if the last blade cmd is older than 25sec we stop the motor			
-			if (last_cmd_vel_age > 25) {
+			if (last_cmd_vel_age > 25 && blade_on_off) {
 				blade_on_off = 0;
 				BLADEMOTOR_Set(0);			
 			}			
@@ -441,6 +441,7 @@ extern "C" void broadcast_handler()
 		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;*/
 		//pubStatus.publish(&status_msg);		
 
+		om_mower_status_msg.mower_status = mower_msgs::Status::MOWER_STATUS_OK;
 		om_mower_status_msg.rain_detected = RAIN_Sense();
 		om_mower_status_msg.emergency = Emergency_State();
 		/* not used anymore*/
@@ -456,7 +457,11 @@ extern "C" void broadcast_handler()
 		om_mower_status_msg.mow_esc_status.temperature_motor = blade_temperature;
 		om_mower_status_msg.mow_esc_status.tacho = BLADEMOTOR_u16RPM;
 		om_mower_status_msg.mow_esc_status.current = BLADEMOTOR_u16Power;
-		om_mower_status_msg.mow_esc_status.status = BLADEMOTOR_bActivated;
+		if (BLADEMOTOR_bActivated) {
+			om_mower_status_msg.mow_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_RUNNING;
+		} else {
+			om_mower_status_msg.mow_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
+		}
 		om_mower_status_msg.left_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 		om_mower_status_msg.right_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 
