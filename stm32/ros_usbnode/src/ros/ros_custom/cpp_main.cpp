@@ -78,11 +78,6 @@ struct ringbuffer rb;
 ros::Time last_cmd_vel(0, 0);
 uint32_t last_cmd_vel_age;		// age of last velocity command
 
-#ifdef BLADEMOTOR_USART_ENABLED
-	ros::Time last_cmd_blade(0, 0);
-	uint32_t last_cmd_blade_age;		// age of last blade command
-#endif
-
 // drive motor control
 static uint8_t left_speed=0;
 static uint8_t right_speed=0;
@@ -282,8 +277,7 @@ extern "C" void motors_handler()
 			}
 #ifdef BLADEMOTOR_USART_ENABLED
 			// if the last blade cmd is older than 25sec we stop the motor			
-			last_cmd_blade_age = nh.now().sec - last_cmd_blade.sec;
-			if (last_cmd_blade_age > 25) {
+			if (last_cmd_vel_age > 25) {
 				blade_on_off = 0;				
 			}			
 			BLADEMOTOR_Set(blade_on_off);			
@@ -475,7 +469,6 @@ extern "C" void broadcast_handler()
 #ifdef BLADEMOTOR_USART_ENABLED
 	void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msgs::MowerControlSrvResponse &res)
 	{	
-		last_cmd_blade = nh.now();	// if the last blade cmd is older than 25sec the motor will be stopped !
 		debug_printf("ROS: cbEnableMowerMotor(from %d to %d)", blade_on_off, req.mow_enabled);	
 		blade_on_off = req.mow_enabled;	
 		debug_printf("[DONE]\r\n");
