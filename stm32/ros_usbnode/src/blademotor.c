@@ -187,7 +187,7 @@ void BLADEMOTOR_Set(uint8_t on_off)
 {    
     if (on_off && !BLADEMOTOR_bActivated)
     {
-        blademotor_pu8RqstMessage[5] = 0x80; /* change speed Motor */
+	    blademotor_pu8RqstMessage[5] = 0x80; /* change speed Motor */
         blademotor_pu8RqstMessage[6] = 0x22; /* change CRC */
     }
     else if (BLADEMOTOR_bActivated)

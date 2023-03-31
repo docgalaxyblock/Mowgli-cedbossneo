@@ -263,6 +263,7 @@ extern "C" void motors_handler()
 		{			
 			DRIVEMOTOR_SetSpeed(0,0,0,0);
 #ifdef BLADEMOTOR_USART_ENABLED			
+			blade_on_off = 0;
 			BLADEMOTOR_Set(0);
 #endif			
 		}
@@ -278,9 +279,9 @@ extern "C" void motors_handler()
 #ifdef BLADEMOTOR_USART_ENABLED
 			// if the last blade cmd is older than 25sec we stop the motor			
 			if (last_cmd_vel_age > 25) {
-				blade_on_off = 0;				
+				blade_on_off = 0;
+				BLADEMOTOR_Set(0);			
 			}			
-			BLADEMOTOR_Set(blade_on_off);			
 #endif			
 		}
 	  }
@@ -471,6 +472,7 @@ extern "C" void broadcast_handler()
 	{	
 		debug_printf("ROS: cbEnableMowerMotor(from %d to %d)", blade_on_off, req.mow_enabled);	
 		blade_on_off = req.mow_enabled;	
+		BLADEMOTOR_Set(blade_on_off);
 		debug_printf("[DONE]\r\n");
 	}
 #endif
