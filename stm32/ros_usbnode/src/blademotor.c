@@ -30,7 +30,7 @@
 *******************************************************************************/
 #define BLADEMOTOR_LENGTH_INIT_MSG 22
 #define BLADEMOTOR_LENGTH_RQST_MSG 7
-#define BLADEMOTOR_LENGTH_RECEIVED_MSG 14
+#define BLADEMOTOR_LENGTH_RECEIVED_MSG 16
 /******************************************************************************
 * Module Preprocessor Macros
 *******************************************************************************/
