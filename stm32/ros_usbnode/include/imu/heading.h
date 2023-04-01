@@ -17,10 +17,6 @@ class Heading
     };
 
     vector<int16_t> a; // accelerometer readings
-    vector<int16_t> m; // magnetometer readings
-
-    vector<int16_t> m_min; // minimum magnetometer readings
-    vector<int16_t> m_max; // maximum magnetometer readings
     
     Heading(void);
 
