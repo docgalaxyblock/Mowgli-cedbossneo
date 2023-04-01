@@ -185,12 +185,12 @@ void  BLADEMOTOR_App(void){
 /// @param on_off 1 to turn on, 0 to turn off
 void BLADEMOTOR_Set(uint8_t on_off)
 {    
-    if (on_off && !BLADEMOTOR_bActivated)
+    if (on_off)
     {
 	    blademotor_pu8RqstMessage[5] = 0x80; /* change speed Motor */
         blademotor_pu8RqstMessage[6] = 0x22; /* change CRC */
     }
-    else if (BLADEMOTOR_bActivated)
+    else
     {
         blademotor_pu8RqstMessage[5] = 0x00; /* change speed Motor */
         blademotor_pu8RqstMessage[6] = 0xa2; /* change CRC */
