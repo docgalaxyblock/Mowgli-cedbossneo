@@ -94,6 +94,9 @@ extern uint8_t do_chirp;
 extern uint16_t cnt_uart4_overrun;      // master
 extern uint16_t cnt_usart2_overrun;     // drive motors
 
+// SPI3 handle (used by spiflash.c)
+extern SPI_HandleTypeDef SPI3_Handle;
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

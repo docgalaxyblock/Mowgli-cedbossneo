@@ -22,6 +22,7 @@
 #include "emergency.h"
 #include "drivemotor.h"
 #include "blademotor.h"
+#include "spiflash.h"
 #include "stm32f1xx_hal.h"
 #include "ringbuffer.h"
 #include "ros.h"
@@ -42,6 +43,7 @@
 // IMU
 #include "imu/imu.h"
 #include "sensor_msgs/Imu.h"
+#include "sensor_msgs/MagneticField.h"
 #include "sensor_msgs/Range.h"
 #include "sensor_msgs/Temperature.h"
 #include <xbot_msgs/WheelTick.h>

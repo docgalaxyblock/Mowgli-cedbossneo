@@ -30,6 +30,7 @@
 #include "drivemotor.h"
 #include "emergency.h"
 #include "soft_i2c.h"
+#include "spiflash.h"
 #include "i2c.h"
 #include "imu/imu.h"
 #include "usb_device.h"
@@ -175,6 +176,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             BLADEMOTOR_ReceiveIT();
        }
 #endif       
+#ifdef HAS_ULTRASONIC_SENSOR    
+       else if (huart->Instance == MASTER_USART_INSTANCE)
+       {
+            ULTRASONICSENSOR_ReceiveIT();       
+       }
+#endif        
 }
 
 int main(void)
@@ -210,6 +217,17 @@ int main(void)
     debug_printf(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
     debug_printf(" * RAIN Sensor enable\r\n");
+
+    if (SPIFLASH_TestDevice())
+    {        
+        SPIFLASH_Config();
+        SPIFLASH_IncBootCounter();
+    }
+    else
+    {
+         debug_printf(" * SPIFLASH: unable to locate SPI Flash\r\n");    
+    }    
+    debug_printf(" * SPIFLASH initialized\r\n");
 
     I2C_Init();
     debug_printf(" * Hard I2C initialized\r\n");

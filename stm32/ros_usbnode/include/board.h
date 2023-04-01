@@ -36,9 +36,14 @@ extern "C" {
     #define PANEL_TYPE_YARDFORCE_500_CLASSIC    1
     // #define PANEL_TYPE_YARDFORCE_900_ECO   1
 
-    #define I_DONT_NEED_MY_FINGERS              0       // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
+    // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
+    #define SUPPORT_ROS_CALIBRATION_IMU           1     
+
+    #define I_DONT_NEED_MY_FINGERS              1       // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
     #define HAS_EXT_IMU                         1       // set this if you have a external IMU
+
+    // #define HAS_ULTRASONIC_SENSOR               1
 
     /// nominal max charge current is 1 Amp
     #define MAX_CHARGE_CURRENT                  1.0f
@@ -270,9 +275,15 @@ extern "C" {
     #define PANEL_TYPE_YARDFORCE_500_CLASSIC    1
     // #define PANEL_TYPE_YARDFORCE_900_ECO   1
 
+    // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
+    #define SUPPORT_ROS_CALIBRATION_IMU           1     
+
+
     // #define HAS_EXT_IMU                         1       // set this if you have a external IMU
 
     #define I_DONT_NEED_MY_FINGERS              1       // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
+
+    // #define HAS_ULTRASONIC_SENSOR               1
 
     /// nominal max charge current is 1 Amp
     #define MAX_CHARGE_CURRENT                  1.0
