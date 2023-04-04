@@ -80,7 +80,7 @@ extern "C" {
     #define IMU_ANGULAR                         1       // external IMU
     
     // we use J18 (Red 9 pin connector as Master Serial Port)
-    #define MASTER_J18 1
+    //#define MASTER_J18 1
 
     // enable Drive and Blade Motor UARTS
     #define DRIVEMOTORS_USART_ENABLED 1
