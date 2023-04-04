@@ -59,7 +59,7 @@
 #define MAX_MPS	  	0.6		 	// Allow maximum speed of 0.6 m/s 
 #define PWM_PER_MPS 300.0		// PWM value of 300 means 1 m/s bot speed
 
-#define TICKS_PER_M 250.0		// Motor Encoder ticks per meter
+#define TICKS_PER_M 300.0		// Motor Encoder ticks per meter
 
 //#define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
 #define WHEEL_BASE  0.285		// The distance between the center of the wheels in meters
@@ -329,10 +329,6 @@ extern "C" void wheelTicks_handler(int8_t p_u8LeftDirection,int8_t p_u8RightDire
     wheel_ticks_msg.stamp = nh.now();
     wheel_ticks_msg.wheel_tick_factor = TICKS_PER_M;
     wheel_ticks_msg.valid_wheels = 0x0C;
-    wheel_ticks_msg.wheel_direction_fl = 0;
-    wheel_ticks_msg.wheel_ticks_fl = (int32_t)p_s16LeftSpeed;
-    wheel_ticks_msg.wheel_direction_fr = 0;
-    wheel_ticks_msg.wheel_ticks_fr = (int32_t)p_s16RightSpeed;
     wheel_ticks_msg.wheel_direction_rl = (p_u8LeftDirection == -1)? 1 : 0;
     wheel_ticks_msg.wheel_ticks_rl = p_u16LeftTicks;
     wheel_ticks_msg.wheel_direction_rr = (p_u8RightDirection == -1)? 1 : 0;;
