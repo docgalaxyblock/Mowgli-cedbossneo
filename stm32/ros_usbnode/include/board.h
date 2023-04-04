@@ -40,7 +40,7 @@ extern "C" {
     #define DEBUG_TYPE_UART 1
     #define DEBUG_TYPE_SWO 2
 
-    #define DEBUG_TYPE 0
+    #define DEBUG_TYPE 1
 
     // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
     //#define SUPPORT_ROS_CALIBRATION_IMU           1
@@ -80,7 +80,7 @@ extern "C" {
     #define IMU_ANGULAR                         1       // external IMU
     
     // we use J18 (Red 9 pin connector as Master Serial Port)
-    //#define MASTER_J18 1
+    #define MASTER_J18 1
 
     // enable Drive and Blade Motor UARTS
     #define DRIVEMOTORS_USART_ENABLED 1
