@@ -114,7 +114,9 @@ void BLADEMOTOR_Init(void)
     BLADEMOTOR_USART_Handler.Init.Mode = USART_MODE_TX_RX;         // Transceiver mode
     
     HAL_UART_Init(&BLADEMOTOR_USART_Handler); 
-    
+
+    DB_TRACE(" * Blade Motor UART initialized\r\n");
+
     /* UART4 DMA Init */
     /* UART4_RX Init */    
     hdma_uart3_rx.Instance = DMA1_Channel3;

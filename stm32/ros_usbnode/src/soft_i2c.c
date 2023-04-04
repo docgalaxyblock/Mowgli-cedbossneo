@@ -29,8 +29,8 @@
 //#define  SW_I2C_WAIT_TIME  7	//240Khz	250Khz	==	4us
 //#define  SW_I2C_WAIT_TIME  6	//275Khz
 //#define  SW_I2C_WAIT_TIME  5	//305Khz
-#define  SW_I2C_WAIT_TIME  4	//350Khz(3.84us)
-//#define  SW_I2C_WAIT_TIME  3	//400Khz(3.44us)
+//#define  SW_I2C_WAIT_TIME  4	//350Khz(3.84us)
+#define  SW_I2C_WAIT_TIME  3	//400Khz(3.44us)
 //#define  SW_I2C_WAIT_TIME  2	//425Khz(3.04us)	333Khz	==	3us
 //#define  SW_I2C_WAIT_TIME  1	//425Khz(2.64us)	400Khz	==	2.5us
 
@@ -68,7 +68,7 @@ void SW_I2C_Init(void)
     
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
 
 
     GPIO_InitStruct.Pin   = SW_I2C1_SCL_PIN;
@@ -205,8 +205,6 @@ void i2c_start_condition(void)
     sda_low();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     scl_low();
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME << 1);
 }
 
 void i2c_stop_condition(void)
@@ -232,7 +230,7 @@ uint8_t i2c_check_ack(void)
     ack = FALSE;
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    for (i = 10; i > 0; i--)
+    for (i = 50; i > 0; i--)
     {
         temp = !(SW_I2C_ReadVal_SDA());	//0=ack , 1=nack
         if (temp)	// if ack, enter

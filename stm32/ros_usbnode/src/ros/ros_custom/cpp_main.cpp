@@ -56,19 +56,19 @@
 #include "mower_msgs/HighLevelStatus.h"
 
 
-#define MAX_MPS	  	0.6		 	// Allow maximum speed of 0.6 m/s 
+
+#define MAX_MPS	  	0.5		 	// Allow maximum speed of 0.5 m/s
 #define PWM_PER_MPS 300.0		// PWM value of 300 means 1 m/s bot speed
 
 #define TICKS_PER_M 300.0		// Motor Encoder ticks per meter
 
 //#define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
 #define WHEEL_BASE  0.285		// The distance between the center of the wheels in meters
-#define WHEEL_DIAMETER 0.198 	// The diameter of the wheels in meters
+#define WHEEL_DIAMETER 0.2 	// The diameter of the wheels in meters
 
-#define ODOM_NBT_TIME_MS   100 	// 200ms
-#define EXT_IMU_NBT_TIME_MS  100
-#define ONBOARD_IMU_NBT_TIME_MS  100
-#define MOTORS_NBT_TIME_MS 100
+#define ODOM_NBT_TIME_MS   100
+#define IMU_NBT_TIME_MS    20
+#define MOTORS_NBT_TIME_MS 20
 #define STATUS_NBT_TIME_MS 250
 
 uint8_t RxBuffer[RxBufferSize];
@@ -83,23 +83,38 @@ static uint8_t right_speed=0;
 static uint8_t left_dir=0;
 static uint8_t right_dir=0;
 
-#ifdef BLADEMOTOR_USART_ENABLED
 	// blade motor control
 	static uint8_t blade_on_off=0;
-#endif
+
+static uint8_t svcCfgDataBuffer[256];
 
 ros::NodeHandle nh;
 
 float imu_onboard_temperature; // cached temp value, so we dont poll I2C constantly
 
+std_msgs::Int16MultiArray buttonstate_msg;
+
+
+/* ultrasonic sensors */
+sensor_msgs::Range ultrasonic_left_msg;
+sensor_msgs::Range ultrasonic_right_msg;
+
+/* bumper sensors */
+sensor_msgs::Range bumper_left_msg;
+sensor_msgs::Range bumper_right_msg;
+
 
 // IMU
 // external IMU (i2c)
 sensor_msgs::Imu imu_msg;
+sensor_msgs::MagneticField imu_mag_msg;
 // onboard IMU (accelerometer and temp)
 sensor_msgs::Imu imu_onboard_msg;
 //sensor_msgs::Temperature imu_onboard_temp_msg;
 
+//sensor_msgs::MagneticField imu_mag_calibration_msg;
+
+// mowgli status message
 xbot_msgs::WheelTick wheel_ticks_msg;
 
 // om status message
@@ -110,12 +125,14 @@ mower_msgs::Status om_mower_status_msg;
 ros::Publisher pubOMStatus("mower/status", &om_mower_status_msg);
 ros::Publisher pubWheelTicks("mower/wheel_ticks", &wheel_ticks_msg);
 
-// IMU onboard
-ros::Publisher pubIMUOnboard("imu_onboard/data_raw", &imu_onboard_msg);
-
 // IMU external
 ros::Publisher pubIMU("imu/data_raw", &imu_msg);
 
+ros::Publisher pubLeftUltrasonic("ultrasonic/left", &ultrasonic_left_msg);
+ros::Publisher pubRightUltrasonic("ultrasonic/right", &ultrasonic_left_msg);
+
+ros::Publisher pubLeftBumper("bumper/left", &bumper_left_msg);
+ros::Publisher pubRightBumper("bumper/right", &bumper_left_msg);
 /*
  * SUBSCRIBERS
  */
@@ -145,11 +162,8 @@ static nbt_t ros_nbt;
 static nbt_t publish_nbt;
 static nbt_t motors_nbt;
 static nbt_t panel_nbt;
-static nbt_t onboard_imu_nbt;
+static nbt_t imu_nbt;
 static nbt_t status_nbt;
-#ifdef HAS_EXT_IMU
-	static nbt_t ext_imu_nbt;
-#endif
 
 /*
  * reboot flag, if true we reboot after next publish_nbt
@@ -230,6 +244,8 @@ extern "C" void chatter_handler()
 		 
 #ifdef IMU_ONBOARD_TEMP
 		  imu_onboard_temperature = IMU_TempRaw();
+	      DB_TRACE("temp : %2.2f \r\n", imu_onboard_temperature);
+
 #else
 		  imu_onboard_temperature = IMU_Onboard_ReadTemp();
 #endif
@@ -261,10 +277,8 @@ extern "C" void motors_handler()
 		if (Emergency_State())
 		{			
 			DRIVEMOTOR_SetSpeed(0,0,0,0);
-#ifdef BLADEMOTOR_USART_ENABLED			
 			blade_on_off = 0;
 			BLADEMOTOR_Set(0);
-#endif			
 		}
 		else {
 			// if the last velocity cmd is older than 1sec we stop the drive motors
@@ -275,13 +289,11 @@ extern "C" void motors_handler()
 			else {
 				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
 			}
-#ifdef BLADEMOTOR_USART_ENABLED
-			// if the last blade cmd is older than 25sec we stop the motor			
-			if (last_cmd_vel_age > 25 && blade_on_off) {
+			// if the last blade cmd is older than 25sec we stop the motor
+			if (last_cmd_vel_age > 30 && blade_on_off) {
 				blade_on_off = 0;
 				BLADEMOTOR_Set(0);			
 			}			
-#endif			
 		}
 	  }
 }
@@ -294,7 +306,7 @@ extern "C" void panel_handler()
 	  if (NBT_handler(&panel_nbt))
 	  {			  
 		PANEL_Tick();
-		if (buttonupdated == 1 && buttoncleared == 0)
+		if (buttonupdated == 1)
 		{
 			debug_printf("ROS: panel_nbt() - buttonstate changed\r\n");
 			mower_msgs::HighLevelControlSrvRequest highControlRequest;
@@ -320,6 +332,30 @@ extern "C" void panel_handler()
 	  }
 }
 
+extern "C" void ultrasonic_handler(void)
+{
+	ultrasonic_left_msg.header.stamp = nh.now();
+	ultrasonic_left_msg.header.frame_id = "ultrasonic_left_link";
+	ultrasonic_right_msg.header.stamp = nh.now();
+	ultrasonic_right_msg.header.frame_id = "ultrasonic_right_link";
+
+	ultrasonic_left_msg.radiation_type = 0;
+	ultrasonic_left_msg.field_of_view  = 0.5; /* 30°*/
+	ultrasonic_left_msg.min_range = 0.30;
+	ultrasonic_left_msg.max_range  = 2.0;
+	ultrasonic_left_msg.range = (float)(ULTRASONICSENSOR_u32GetLeftDistance())/10000;
+
+	ultrasonic_right_msg.radiation_type = 0;
+	ultrasonic_right_msg.field_of_view  = 0.5; /* 30°*/
+	ultrasonic_right_msg.min_range = 0.30;
+	ultrasonic_right_msg.max_range  = 2.0;
+	ultrasonic_right_msg.range = (float)(ULTRASONICSENSOR_u32GetRightDistance())/10000;
+
+	pubLeftUltrasonic.publish(&ultrasonic_left_msg);
+	pubRightUltrasonic.publish(&ultrasonic_right_msg);
+
+}
+
 /* \fn wheelTicks_handler
 * \brief Send wheelt tick to openmower by rosserial
 * is called when receiving the motors unit answer (every 20ms)
@@ -339,10 +375,7 @@ extern "C" void wheelTicks_handler(int8_t p_u8LeftDirection,int8_t p_u8RightDire
 
 extern "C" void broadcast_handler()
 {	
-
-	 
-#ifdef HAS_EXT_IMU
-	  if (NBT_handler(&ext_imu_nbt))
+	if (NBT_handler(&imu_nbt))
 	  {
 		////////////////////////////////////////
 		// IMU Messages
@@ -381,26 +414,38 @@ extern "C" void broadcast_handler()
 #endif		
 		imu_msg.header.stamp = nh.now();
 		pubIMU.publish(&imu_msg);
-	  } // if (NBT_handler(&ext_imu_nbt))
-#endif
 
- 	   if (NBT_handler(&onboard_imu_nbt))	  
-	  {
 		/**********************************/
-		/* Onboard (GForce) Accelerometer */
+	/* Exernal Magnetometer Corrected */
 		/**********************************/
-#ifdef IMU_ONBOARD_ACCELERATION
-		IMU_Onboard_ReadAccelerometer(&imu_onboard_msg.linear_acceleration.x, &imu_onboard_msg.linear_acceleration.y, &imu_onboard_msg.linear_acceleration.z);		
-		IMU_Onboard_AccelerometerSetCovariance(imu_onboard_msg.linear_acceleration_covariance);	
-#else
-		imu_onboard_msg.linear_acceleration.x = imu_onboard_msg.linear_acceleration.y = imu_onboard_msg.linear_acceleration.z = 0;		
-#endif
-		// no onboard gyro so angular velocities are always zero
-		imu_onboard_msg.angular_velocity.x = imu_onboard_msg.angular_velocity.y = imu_onboard_msg.angular_velocity.z = 0;		
-		imu_onboard_msg.angular_velocity_covariance[0] = -1;		// indicate *not valid* to EKF
-		imu_onboard_msg.header.stamp = nh.now();
-		pubIMUOnboard.publish(&imu_onboard_msg);		
-	  } // if (NBT_handler(&onboard_imu_nbt))
+	double x,y,z;
+
+	// Orientation (Magnetometer)
+	imu_mag_msg.header.frame_id = "imu";
+	IMU_ReadMagnetometer(&x, &y, &z);
+	imu_mag_msg.magnetic_field.x = x;
+	imu_mag_msg.magnetic_field.y = y;
+	imu_mag_msg.magnetic_field.z = z;
+
+	// covariance is fixed for now
+	imu_mag_msg.magnetic_field_covariance[0] = 1e-3;
+	imu_mag_msg.magnetic_field_covariance[4] = 1e-3;
+	imu_mag_msg.magnetic_field_covariance[8] = 1e-3;
+	imu_mag_msg.header.stamp = nh.now();
+	//pubIMUMag.publish(&imu_mag_msg);
+
+	/******************************************/
+	/* Exernal Magnetometer RAW (Calibration) */
+	/******************************************/
+	IMU_ReadMagnetometerRaw(&x, &y, &z);
+	imu_mag_calibration_msg.x = x;
+	imu_mag_calibration_msg.y = y;
+	imu_mag_calibration_msg.z = z;
+
+	imu_mag_msg.header.stamp = nh.now();
+	//pubIMUMagCalibration.publish(&imu_mag_calibration_msg);
+
+	} // if (NBT_handler(&imu_nbt))
 
   	  if (NBT_handler(&status_nbt))
 	  {
@@ -465,6 +510,155 @@ extern "C" void broadcast_handler()
 }
 
 /*
+ *  callback for mowgli/GetCfg Service
+ */
+void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res)
+{
+    debug_printf("cbGetCfg:\r\n");
+	debug_printf(" name: %s\r\n", req.name);
+
+	res.data_length = SPIFLASH_ReadCfgValue(req.name, &res.type, svcCfgDataBuffer);
+
+	if (res.data_length > 0)
+	{
+		res.data = (uint8_t*)&svcCfgDataBuffer;
+		res.status = 1;
+	}
+	else
+	{
+		res.status = 0;
+	}
+}
+
+/// @brief Set Led and optionally reset all other Leds (0x40) + Chirp (0x80)
+/// @param req req.led the LED number and any option flags
+/// @param res
+void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res)
+{
+ //  debug_printf("cbSetLed:\r\n");
+ //  debug_printf(" led: %d\r\n", req.led);
+   uint8_t v=req.led;
+   if ( (req.led & 0x40) == 0x40)	// clear all Leds
+   {
+		for (uint8_t i=0;i<LED_STATE_SIZE;i++)
+		{
+			PANEL_Set_LED(i, PANEL_LED_OFF);
+		}
+   }
+   if ( (req.led & 0x80) == 0x80)
+   {
+     do_chirp = 1;
+   }
+
+   // remove flag bits, turn on led
+   v &= ~(1UL<<7);
+   v &= ~(1UL<<6);
+   PANEL_Set_LED(v, PANEL_LED_ON);
+}
+
+/// @brief Clear Led and optionally reset all other Leds (0x40) + Chirp (0x80)
+/// @param req req.led the LED number and any option flags
+/// @param res
+void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res)
+{
+ //  debug_printf("cbClrLed:\r\n");
+ //  debug_printf(" led: %d\r\n", req.led);
+   uint8_t v=req.led;
+   if ( (req.led & 0x40) == 0x40)	// clear all Leds
+   {
+		for (uint8_t i=0;i<LED_STATE_SIZE;i++)
+		{
+			PANEL_Set_LED(i, PANEL_LED_OFF);
+		}
+   }
+   if ( (req.led & 0x80) == 0x80)
+   {
+     do_chirp = 1;
+   }
+
+   // remove flag bits, turn of led
+   v &= ~(1UL<<7);
+   v &= ~(1UL<<6);
+   PANEL_Set_LED(v, PANEL_LED_OFF);
+}
+
+
+/*
+ *  callback for mowgli/SetCfg Service
+ */
+void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res) {
+	union {
+		float f;
+		uint8_t b[4];
+	} float_val;
+
+	union {
+		double d;
+		uint8_t b[8];
+	} double_val;
+	uint8_t i;
+
+    debug_printf("cbSetCfg:\r\n");
+	debug_printf(" type: %d\r\n", req.type);
+	debug_printf(" len: %d\r\n", req.data_length);
+	debug_printf(" name: %s\r\n", req.name);
+
+	if (req.type == 0) // TYPE_INT32 (0)
+	{
+		int32_t int32_val = (req.data[0]) + (req.data[1]<<8) + (req.data[2]<<16) + (req.data[3]<<24);
+		debug_printf("(int32) data: %d\r\n", int32_val);
+	}
+	if (req.type == 1) // TYPE_UINT32 (1)
+	{
+		uint32_t uint32_val = (req.data[0]) + (req.data[1]<<8) + (req.data[2]<<16) + (req.data[3]<<24);
+		debug_printf("(uint32) data: %d\r\n", uint32_val);
+	}
+	if (req.type == 2) // TYPE_FLOAT (2)
+	{
+		for (i=0;i<4;i++)
+		{
+			float_val.b[i] = req.data[i];
+		}
+		debug_printf("(float) data: %f\r\n", float_val.f);
+	}
+	if (req.type == 3)  // TYPE_DOUBLE (3)
+	{
+		for (i=0;i<8;i++)
+		{
+			double_val.b[i] = req.data[i];
+		}
+		debug_printf("(double) data: %Lf\r\n", double_val.d);
+	}
+	if (req.type == 4)	// TYPE_STRING (4)
+	{
+		debug_printf("(string) data: '");
+		for (i=0;i<req.data_length;i++)
+		{
+			debug_printf("%c", req.data[i]);
+		}
+		debug_printf("'\r\n");
+	}
+	if (req.type == 5)	// TYPE_BARRAY (5)
+	{
+		debug_printf("(byte array) data: '");
+		for (i=0;i<req.data_length;i++)
+		{
+			debug_printf("0x%02x ", req.data[i]);
+		}
+		debug_printf("'\r\n");
+	}
+
+	// debug print data[] array
+	for (i=0;i<req.data_length;i++)
+	{
+		debug_printf(" data[%d]: %d\r\n", i, req.data[i]);
+	}
+
+	SPIFLASH_WriteCfgValue(req.name, req.type, req.data_length, req.data);
+	res.status = 1;
+}
+
+/*
  *  callback for mowgli/EnableMowerMotor Service
  */
 #ifdef BLADEMOTOR_USART_ENABLED
@@ -502,6 +696,26 @@ extern "C" void spinOnce()
 	  if (NBT_handler(&ros_nbt))
 	  {
 			nh.spinOnce();
+
+		bumper_left_msg.header.stamp = nh.now();
+		bumper_left_msg.header.frame_id = "bumper_left_link";
+		bumper_right_msg.header.stamp = nh.now();
+		bumper_right_msg.header.frame_id = "bumper_right_link";
+
+		bumper_left_msg.radiation_type = 0;
+		bumper_left_msg.field_of_view  = 1.64; /* 90°*/
+		bumper_left_msg.min_range = 0.0;
+		bumper_left_msg.max_range  = 0.20;
+		bumper_left_msg.range = HALLSTOP_Left_Sense() * 0.05;
+
+		bumper_right_msg.radiation_type = 0;
+		bumper_right_msg.field_of_view  = 1.64; /* 90°*/
+		bumper_right_msg.min_range = 0.0;
+		bumper_right_msg.max_range  = 0.20;
+		bumper_right_msg.range = HALLSTOP_Right_Sense() * 0.05;
+
+		pubLeftBumper.publish(&bumper_left_msg);
+		pubRightBumper.publish(&bumper_right_msg);
 	  }
 }
 
@@ -514,13 +728,21 @@ extern "C" void init_ROS()
 
 	// Initialize ROS
 	nh.initNode();
+	/*set max time to 10ms to give some time to the other functions*/
+	//nh.setSpinTimeout(10);
 
-	// Initialize Pubs
-#ifdef HAS_EXT_IMU	
+
+
+	nh.advertise(pubLeftUltrasonic);
+	nh.advertise(pubRightUltrasonic);
+
+	nh.advertise(pubLeftBumper);
+	nh.advertise(pubRightBumper);
+
+	nh.advertise(pubButtonState);
 	nh.advertise(pubIMU);
-#endif
+	nh.advertise(pubStatus);
     nh.advertise(pubWheelTicks);
-	nh.advertise(pubIMUOnboard);
 	nh.advertise(pubOMStatus);
 	
 	// Initialize Subscribers
@@ -539,11 +761,7 @@ extern "C" void init_ROS()
 	NBT_init(&publish_nbt, 1000);
 	NBT_init(&panel_nbt, 100);	
 	NBT_init(&status_nbt, STATUS_NBT_TIME_MS);
-#ifdef HAS_EXT_IMU	
-	NBT_init(&ext_imu_nbt, EXT_IMU_NBT_TIME_MS);
-#endif	
-	NBT_init(&onboard_imu_nbt, ONBOARD_IMU_NBT_TIME_MS);
-
+	NBT_init(&imu_nbt, IMU_NBT_TIME_MS);
 	NBT_init(&motors_nbt, MOTORS_NBT_TIME_MS);
 	NBT_init(&ros_nbt, 10);	
 }

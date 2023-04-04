@@ -41,19 +41,18 @@
 #include "cpp_main.h"
 #include "ringbuffer.h"
 
-static void WATCHDOG_Refresh(void); 
+static void WATCHDOG_vInit(void);
+static void WATCHDOG_Refresh(void);
 
 static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
 static nbt_t main_emergency_nbt;
+static nbt_t main_ultrasonicsensor_nbt;
+static nbt_t main_blademotor_nbt;
 static nbt_t main_drivemotor_nbt;
 static nbt_t main_wdg_nbt;
 static nbt_t main_buzzer_nbt;
-#ifdef BLADEMOTOR_USART_ENABLED
-  static nbt_t main_blademotor_nbt;
-#endif
 
-// MASTER tx buffering
 volatile uint8_t  master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
 static char master_tx_buffer[255];
@@ -93,17 +92,11 @@ uint8_t  chargecontrol_is_charging = 0;
 
 
 UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
-/*
-UART_HandleTypeDef DRIVEMOTORS_USART_Handler; // UART  Handle
-UART_HandleTypeDef BLADEMOTOR_USART_Handler; // UART  Handle
-*/
 
 // SPI3 FLASH
 SPI_HandleTypeDef SPI3_Handle;
 
 // Drive Motors DMA
-DMA_HandleTypeDef hdma_usart2_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart4_tx;
 
@@ -120,10 +113,12 @@ typedef enum{
 } ADC2_channelSelection_e;
 ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
 void adc2_SetChannel(ADC2_channelSelection_e channel);
-void ADC2_Init();
+
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
+TIM_HandleTypeDef TIM4_Handle;  // PWM Buzzer
+
 IWDG_HandleTypeDef IwdgHandle = {0};
 WWDG_HandleTypeDef WwdgHandle = {0};
 
@@ -161,27 +156,20 @@ void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart)
  */ 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {                  
-       if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
+  if (huart->Instance == MASTER_USART_INSTANCE)
        {
-            DRIVEMOTOR_ReceiveIT();
-       }       
-       else if(huart->Instance == PANEL_USART_INSTANCE)
-       {
-           PANEL_Handle_Received_Data(panel_rcvd_data);
-           HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
+    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+    ULTRASONICSENSOR_ReceiveIT();
+    #endif
        }
-#ifdef BLADEMOTOR_USART_ENABLED
        else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
        {
             BLADEMOTOR_ReceiveIT();
        }
-#endif       
-#ifdef HAS_ULTRASONIC_SENSOR    
-       else if (huart->Instance == MASTER_USART_INSTANCE)
+  else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
        {
-            ULTRASONICSENSOR_ReceiveIT();       
+    DRIVEMOTOR_ReceiveIT();
        }
-#endif        
 }
 
 int main(void)
@@ -196,27 +184,32 @@ int main(void)
     
     MASTER_USART_Init();
 
-    debug_printf("\r\n");
-    debug_printf("    __  ___                    ___\r\n");
-    debug_printf("   /  |/  /___ _      ______ _/ (_)\r\n");
-    debug_printf("  / /|_/ / __ \\ | /| / / __ `/ / / \r\n");
-    debug_printf(" / /  / / /_/ / |/ |/ / /_/ / / /  \r\n");
-    debug_printf("/_/  /_/\\____/|__/|__/\\__, /_/_/   \r\n");
-    debug_printf("                     /____/        \r\n");
-    debug_printf(" Version: %d.%d.%d\r\n", MOWGLI_SW_VERSION_MAJOR, MOWGLI_SW_VERSION_BRANCH, MOWGLI_SW_VERSION_MINOR);
-    debug_printf("\r\n\r\n");
-    debug_printf(" * Master USART (debug) initialized\r\n");
+    DB_TRACE("\r\n");
+    DB_TRACE("    __  ___                    ___\r\n");
+    DB_TRACE("   /  |/  /___ _      ______ _/ (_)\r\n");
+    DB_TRACE("  / /|_/ / __ \\ | /| / / __ `/ / / \r\n");
+    DB_TRACE(" / /  / / /_/ / |/ |/ / /_/ / / /  \r\n");
+    DB_TRACE("/_/  /_/\\____/|__/|__/\\__, /_/_/   \r\n");
+    DB_TRACE("                     /____/        \r\n");
+    DB_TRACE("\r\n\r\n");
+    DB_TRACE(" * Master USART (debug) initialized\r\n");
     LED_Init();
-    debug_printf(" * LED initialized\r\n");
+    DB_TRACE(" * LED initialized\r\n");
     TIM2_Init();
     ADC2_Init();
+    //Perimeter_vInit();
+    DB_TRACE(" * ADC1 initialized\r\n");
     TIM3_Init();
     HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);    
-    debug_printf(" * Timer3 (Beeper) initialized\r\n");
+    TIM4_Init();
+    HAL_TIM_PWM_Start(&TIM4_Handle, TIM_CHANNEL_3);
+    DB_TRACE(" * Timer3 (Beeper) initialized\r\n");
     TF4_Init();
-    debug_printf(" * 24V switched on\r\n");
+    DB_TRACE(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
-    debug_printf(" * RAIN Sensor enable\r\n");
+    DB_TRACE(" * RAIN Sensor enable\r\n");
+    HALLSTOP_Sensor_Init();
+    DB_TRACE(" * HALL Sensor enabled\r\n");
 
     if (SPIFLASH_TestDevice())
     {        
@@ -225,12 +218,12 @@ int main(void)
     }
     else
     {
-         debug_printf(" * SPIFLASH: unable to locate SPI Flash\r\n");    
+         DB_TRACE(" * SPIFLASH: unable to locate SPI Flash\r\n");
     }    
-    debug_printf(" * SPIFLASH initialized\r\n");
+    DB_TRACE(" * SPIFLASH initialized\r\n");
 
     I2C_Init();
-    debug_printf(" * Hard I2C initialized\r\n");
+    DB_TRACE(" * Hard I2C initialized\r\n");
     if (I2C_Acclerometer_TestDevice())
     {
          I2C_Accelerometer_Setup();          
@@ -238,51 +231,44 @@ int main(void)
     else
     {
         chirp(3);        
-        debug_printf(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
+        DB_TRACE(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
     }    
-    debug_printf(" * Accelerometer (onboard/tilt safety) initialized\r\n");    
+    DB_TRACE(" * Accelerometer (onboard/tilt safety) initialized\r\n");
     SW_I2C_Init();
-    debug_printf(" * Soft I2C (J18) initialized\r\n");
-#ifdef HAS_EXT_IMU    
-    debug_printf(" * Testing supported external IMUs:\r\n");
+    DB_TRACE(" * Soft I2C (J18) initialized\r\n");
+    DB_TRACE(" * Testing supported IMUs:\r\n");
     IMU_TestDevice();
     IMU_Init();
-    IMU_CalibrateExternal();
-#else
-    debug_printf(" * External IMU not enabled !\r\n");
-#endif
-    debug_printf(" * Onboard IMU:\r\n");
-    IMU_CalibrateOnboard();    
+    IMU_Calibrate();
     Emergency_Init();
-    debug_printf(" * Emergency sensors initialized\r\n");
+    DB_TRACE(" * Emergency sensors initialized\r\n");
     TIM1_Init();   
-    debug_printf(" * Timer1 (Charge PWM) initialized\r\n");    
+    DB_TRACE(" * Timer1 (Charge PWM) initialized\r\n");
     MX_USB_DEVICE_Init();
-    debug_printf(" * USB CDC initialized\r\n");
+    DB_TRACE(" * USB CDC initialized\r\n");
     PANEL_Init();
-    debug_printf(" * Panel initialized\r\n");
+    DB_TRACE(" * Panel initialized\r\n");
 
     // Charge CH1/CH1N PWM Timer
     HAL_TIM_PWM_Start(&TIM1_Handle, TIM_CHANNEL_1);
     HAL_TIMEx_PWMN_Start(&TIM1_Handle, TIM_CHANNEL_1);
-    debug_printf(" * Charge Controler PWM Timers initialized\r\n");
+    DB_TRACE(" * Charge Controler PWM Timers initialized\r\n");
     
     // Init Drive Motors and Blade Motor
     #ifdef DRIVEMOTORS_USART_ENABLED
         DRIVEMOTOR_Init();
-        debug_printf(" * Drive Motors USART initialized\r\n");        
+        DB_TRACE(" * Drive Motors USART initialized\r\n");
     #endif
     #ifdef BLADEMOTOR_USART_ENABLED
         BLADEMOTOR_Init();
-        debug_printf(" * Blade Motor USART initialized\r\n");
+    #endif
+    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+      ULTRASONICSENSOR_Init();
     #endif
     
 
-    HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
-    debug_printf(" * Panel Interrupt enabled\r\n");
-
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
-    HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);                       // turn on 28V supply
+    HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);
 
 
 
@@ -290,27 +276,32 @@ int main(void)
 	  NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
 	  NBT_init(&main_emergency_nbt, 10);
-#ifdef BLADEMOTOR_USART_ENABLED    
-    NBT_init(&main_blademotor_nbt, 100);
+    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+    NBT_init(&main_ultrasonicsensor_nbt, 50);
 #endif    
-    NBT_init(&main_drivemotor_nbt, 10);
+    NBT_init(&main_blademotor_nbt, 100);
+    NBT_init(&main_drivemotor_nbt, 20);
     NBT_init(&main_wdg_nbt,10);
     NBT_init(&main_buzzer_nbt,200);
-    debug_printf(" * NBT Main timers initialized\r\n");     
+
+    DB_TRACE(" * NBT Main timers initialized\r\n");
 
  #ifdef I_DONT_NEED_MY_FINGERS
-    debug_printf("\r\n");
-    debug_printf("=========================================================\r\n");
-    debug_printf(" EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
-    debug_printf("=========================================================\r\n");
-    debug_printf("\r\n");
+    DB_TRACE("\r\n");
+    DB_TRACE("=========================================================\r\n");
+    DB_TRACE(" EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
+    DB_TRACE("=========================================================\r\n");
+    DB_TRACE("\r\n");
  #endif
     // Initialize ROS
     init_ROS();
-    debug_printf(" * ROS serial node initialized\r\n");     
-    debug_printf("\r\n >>> entering main loop ...\r\n\r\n"); 
+    DB_TRACE(" * ROS serial node initialized\r\n");
+    DB_TRACE("\r\n >>> entering main loop ...\r\n\r\n");
     // <chirp><chirp> means we are in the main loop 
     chirp(2);    
+
+    //WATCHDOG_vInit();
+
     while (1)
     {        
         chatter_handler();
@@ -319,6 +310,11 @@ int main(void)
         spinOnce();                                   
         broadcast_handler();   
         DRIVEMOTOR_App_Rx();
+      //Perimeter_vApp();
+      /* try to send ros message without delay*/
+      if(ULTRASONIC_MessageReceived() == 1){
+        ultrasonic_handler();
+      }
 
         if (NBT_handler(&main_chargecontroller_nbt))
         {            
@@ -327,8 +323,15 @@ int main(void)
         if (NBT_handler(&main_statusled_nbt))
         {            
             StatusLEDUpdate();                                 
-              // debug_printf("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);           
+
+            // DB_TRACE("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);
         }
+    #if(DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+      if (NBT_handler(&main_ultrasonicsensor_nbt))
+	    {
+			  ULTRASONICSENSOR_App();
+	    }
+    #endif
         if (NBT_handler(&main_wdg_nbt))
         {            
             WATCHDOG_Refresh();                   
@@ -337,7 +340,7 @@ int main(void)
         {            
             DRIVEMOTOR_App_10ms();      
         }
-#ifdef BLADEMOTOR_USART_ENABLED        
+
         if (NBT_handler(&main_blademotor_nbt))
         {            
         float f_tmp;
@@ -358,19 +361,21 @@ int main(void)
         DB_TRACE("t: %d \n",(currentTick-old_tick));
         old_tick = currentTick;
         }
-#endif
+
         if (NBT_handler(&main_buzzer_nbt))
         {            
               // TODO 
             if (do_chirp)
             {
               TIM3_Handle.Instance->CCR4 = 10; // chirp on
+            TIM4_Handle.Instance->CCR3 = 10; // chirp on
               do_chirp = 0;
               do_chirp_duration_counter = 0;
             }
             if (do_chirp_duration_counter == 1)
             {
               TIM3_Handle.Instance->CCR4 = 0; // chirp off
+            TIM4_Handle.Instance->CCR3 = 0; // chirp off
             }
             do_chirp_duration_counter++;
         }
@@ -503,6 +508,44 @@ void RAIN_Sensor_Init()
     HAL_GPIO_Init(RAIN_SENSOR_PORT, &GPIO_InitStruct);
 }
 
+/**
+ * @brief Init HALL STOP Sensor (PD2&3) Inputs
+ * @retval None
+ */
+void HALLSTOP_Sensor_Init()
+{
+     HALLSTOP_GPIO_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct;
+    GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+    HAL_GPIO_Init(HALLSTOP_PORT, &GPIO_InitStruct);
+}
+
+/**
+ * @brief Poll HALLSTOP_Left_Sense Sensor
+ * @retval  1 if trigger , 0 if no stop sensor trigger
+ */
+int HALLSTOP_Left_Sense(void){
+  #if OPTION_BUMPER == 1
+  return(HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_2));
+  #else
+  return 0;
+  #endif
+}
+
+/**
+ * @brief Poll HALLSTOP_Right_Sense
+ * @retval 1 if trigger , 0 if no stop sensor trigger
+ */
+int HALLSTOP_Right_Sense(void){
+   #if OPTION_BUMPER == 1
+  return(HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_3));
+  #else
+  return 0;
+   #endif
+}
 
 /**
  * @brief Init TF4 (24V Power Switch)
@@ -519,45 +562,6 @@ void TF4_Init()
     HAL_GPIO_Init(TF4_GPIO_PORT, &GPIO_InitStruct);
 }
 
-/**
- * @brief PAC 5223 Reset Line (Blade Motor)
- * @retval None
- */
-void PAC5223RESET_Init()
-{
-    PAC5223RESET_GPIO_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct;
-    GPIO_InitStruct.Pin = PAC5223RESET_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(PAC5223RESET_GPIO_PORT, &GPIO_InitStruct);
-}
-
-/**
- * @brief PAC 5210 Reset Line (Drive Motors)
- * @retval None
- */
-void PAC5210RESET_Init()
-{
-    PAC5210RESET_GPIO_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct;
-    GPIO_InitStruct.Pin = PAC5210RESET_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(PAC5210RESET_GPIO_PORT, &GPIO_InitStruct);
-
-
-    // PD7 (->PAC5210 PC4), PD8 (->PAC5210 PC3)
-     __HAL_RCC_GPIOD_CLK_ENABLE();    
-    GPIO_InitStruct.Pin = GPIO_PIN_7| GPIO_PIN_8;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7 | GPIO_PIN_8 , 1);
-}
 
 /**
  * @brief SPI3 Bus (onboard FLASH)
@@ -637,7 +641,7 @@ void Error_Handler(void)
     __disable_irq();
     while (1)
     {
-        debug_printf("Error Handler reached, oops\r\n");
+        DB_TRACE("Error Handler reached, oops\r\n");
         chirp(1);        
     }
     /* USER CODE END Error_Handler_Debug */
@@ -931,9 +935,6 @@ void adc2_SetChannel(ADC2_channelSelection_e channel){
   #endif
   #ifdef BOARD_YARDFORCE500 
      __HAL_AFIO_REMAP_TIM1_ENABLE();        // to use PE8/9 it is a full remap
-  #endif  
-  #ifdef BOARD_YARDFORCE500_BAGHEERA
-    __HAL_AFIO_REMAP_TIM1_ENABLE();        // to use PE8/9 it is a full remap
   #endif
 }
 
@@ -1067,6 +1068,71 @@ void TIM3_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
+
+/**
+  * @brief TIM4 Initialization Function
+  *
+  * Buzzer is on PD14 (PWM)
+  *
+  * @param None
+  * @retval None
+  */
+void TIM4_Init(void)
+{
+  __HAL_RCC_TIM4_CLK_ENABLE();
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  TIM4_Handle.Instance = TIM4;
+  TIM4_Handle.Init.Prescaler = 36000; // 72Mhz -> 2khz
+  TIM4_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+  TIM4_Handle.Init.Period = 50;
+  TIM4_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  TIM4_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&TIM4_Handle) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&TIM4_Handle, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&TIM4_Handle) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&TIM4_Handle, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&TIM4_Handle, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  __HAL_AFIO_REMAP_TIM4_ENABLE();        // to use PD14 it is a full remap
+
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  /**TIM4 GPIO Configuration
+  PD14    ------> TIM4_CH3
+  */
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = GPIO_PIN_14;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+}
+
 
 /**
   * Enable DMA controller clock
@@ -1248,7 +1314,7 @@ void ChargeController(void)
 void StatusLEDUpdate(void)
 {
         if (Emergency_State()) {
-            debug_printf("Emergency !");
+            DB_TRACE("Emergency !");
             PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
         } else {
             PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_OFF);
@@ -1294,12 +1360,12 @@ void StatusLEDUpdate(void)
 void msgPrint(uint8_t *msg, uint8_t msg_len)
 {
      int i;
-     debug_printf("msg: ");
+     DB_TRACE("msg: ");
      for (i=0;i<msg_len;i++)
      {
-        debug_printf(" %02x", msg[i]);
+        DB_TRACE(" %02x", msg[i]);
      }            
-     debug_printf("\r\n");
+     DB_TRACE("\r\n");
 }
 
 /*
@@ -1327,8 +1393,10 @@ void chirp(uint8_t count)
     for (i=0;i<count;i++)
     {
         TIM3_Handle.Instance->CCR4 = 10;   
+        TIM4_Handle.Instance->CCR3 = 10;
         HAL_Delay(100);
         TIM3_Handle.Instance->CCR4 = 0;  
+        TIM4_Handle.Instance->CCR3 = 0;
         HAL_Delay(50);
     }
 }
@@ -1341,7 +1409,14 @@ void vprint(const char *fmt, va_list argp)
     char string[200];    
     if(0 < vsprintf(string,fmt,argp)) // build string
     {
-        MASTER_Transmit((unsigned char*)string, strlen(string));       
+        #if DEBUG_TYPE == DEBUG_TYPE_SWO
+         for (int i = 0; i < strlen(string); i++)
+         {
+            ITM_SendChar(string[i]);
+         }
+        #elif DEBUG_TYPE == DEBUG_TYPE_UART
+        MASTER_Transmit((unsigned char*)string, strlen(string));
+        #endif
     }
 }
 
@@ -1371,6 +1446,50 @@ void MASTER_Transmit(uint8_t *buffer, uint8_t len)
 }
 
 /*
+ * Initialize Watchdog - not tested yet (by Nekraus)
+ */
+static void WATCHDOG_vInit(void)
+{
+  #if defined(DB_ACTIVE)
+    /* setup DBGMCU block - stop IWDG at break in debug mode */
+        __HAL_FREEZE_IWDG_DBGMCU();
+  #endif  /* DB_ACTIVE */
+
+  /* change the period to 50ms */
+  IwdgHandle.Instance = IWDG;
+  IwdgHandle.Init.Prescaler = IWDG_PRESCALER_256;
+  IwdgHandle.Init.Reload = 0xFFF;
+  /* Enable IWDG (LSI automatically enabled by HW) */
+
+  /* if window feature is not applied Init() precedes Start() */
+  if( HAL_IWDG_Init(&IwdgHandle) != HAL_OK )
+  {
+    #ifdef DB_ACTIVE
+      DB_TRACE(" IWDG init Error\n\r");
+    #endif  /* DB_ACTIVE */
+  }
+
+  /* Initialize WWDG for run time if applicable */
+  #if defined(DB_ACTIVE)
+    /* setup DBGMCU block - stop WWDG at break in debug mode */
+    __HAL_FREEZE_WWDG_DBGMCU();
+  #endif  /* DB_ACTIVE */
+
+  /* Setup period - 20ms */
+  __WWDG_CLK_ENABLE();
+  WwdgHandle.Instance = WWDG;
+  WwdgHandle.Init.Prescaler = WWDG_PRESCALER_8;
+  WwdgHandle.Init.Counter = 0x7F; /* 40.02 ms*/
+  WwdgHandle.Init.Window = 0x7F; /* 0ms */
+  //if( HAL_WWDG_Init(&WwdgHandle) != HAL_OK )
+  {
+    #ifdef DB_ACTIVE
+      DB_TRACE(" WWDG init Error\n\r");
+    #endif  /* DB_ACTIVE */
+  }
+} /* WATCHDOG_vInit() */
+
+/*
  * Feed the watchdog every 10ms
  */
 static void WATCHDOG_Refresh(void){
@@ -1396,6 +1515,10 @@ static void WATCHDOG_Refresh(void){
 
 
 void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
+
+  if(hadc == &ADC_Handle){
+    PERIMETER_vITHandle();
+  }
 
   if(hadc == &ADC2_Handle){
     uint16_t l_u16Rawdata = ADC2_Handle.Instance->DR;

@@ -248,6 +248,13 @@ void DRIVEMOTOR_App_10ms(void){
                 DRIVEMOTOR_u32ErrorCnt++;
             }
 
+            /* hit an obstacle  and move forward!!!!!! stop and wait*/
+            if((HALLSTOP_Left_Sense() || HALLSTOP_Right_Sense()) && (left_dir_req || right_dir_req)  ){
+                drivemotor_prepareMsg(0,0,0,0);
+            }
+
+
+
             HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
 
             break;

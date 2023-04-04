@@ -107,11 +107,9 @@ void Error_Handler(void);
 void LED_Init();
 void TF4_Init();
 void RAIN_Sensor_Init();
-void PAC5223RESET_Init();
 void PAC5210RESET_Init();
 void MASTER_USART_Init();
 void DRIVEMOTORS_USART_Init();
-void BLADEMOTOR_USART_Init();
 void SystemClock_Config();
 void ADC1_Init(void);
 void TIM1_Init(void);
@@ -129,6 +127,8 @@ void DRIVEMOTORS_Transmit(uint8_t *buffer, uint8_t len);
 
 // Sensor Wrapper functions
 int RAIN_Sense(void);
+int HALLSTOP_Left_Sense(void);
+int HALLSTOP_Right_Sense(void);
 
 void debug_printf(const char *fmt, ...);
 
