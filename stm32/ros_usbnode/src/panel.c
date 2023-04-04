@@ -37,11 +37,6 @@ uint8_t buttoncleared = 0;
 
 uint8_t Led_States[LED_STATE_SIZE];
 
-static uint8_t SendBuffer[256];
-static uint8_t ReceiveBuffer[256];
-static uint8_t ReceiveIndex = 0;
-static uint8_t ReceiveLength;
-static uint8_t ReceiveCRC;
 // static uint8_t Key_Pressed;
 static uint8_t Frame_Received_Panel = 0;
 /* per panel type initializers */

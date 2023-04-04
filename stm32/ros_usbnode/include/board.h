@@ -42,9 +42,6 @@ extern "C" {
 
     #define DEBUG_TYPE 0
 
-    #define OPTION_ULTRASONIC 0
-    #define OPTION_BUMPER 0
-
     // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
     //#define SUPPORT_ROS_CALIBRATION_IMU           1
 

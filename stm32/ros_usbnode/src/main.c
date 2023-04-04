@@ -41,17 +41,12 @@
 #include "cpp_main.h"
 #include "ringbuffer.h"
 
-static void WATCHDOG_vInit(void);
-static void WATCHDOG_Refresh(void);
-
 static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
 static nbt_t main_emergency_nbt;
-static nbt_t main_ultrasonicsensor_nbt;
 static nbt_t main_blademotor_nbt;
 static nbt_t main_drivemotor_nbt;
 static nbt_t main_wdg_nbt;
-static nbt_t main_buzzer_nbt;
 
 volatile uint8_t  master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
@@ -73,7 +68,6 @@ union FtoU{
 
 int blade_motor = 0;
 
-static uint8_t panel_rcvd_data;
 volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage,input_PC3;
 
 union FtoU ampere_acc;
@@ -156,19 +150,13 @@ void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart)
  */ 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {                  
-  if (huart->Instance == MASTER_USART_INSTANCE)
-       {
-    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
-    ULTRASONICSENSOR_ReceiveIT();
-    #endif
-       }
-       else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
+  if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
        {
             BLADEMOTOR_ReceiveIT();
        }
   else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
        {
-    DRIVEMOTOR_ReceiveIT();
+            DRIVEMOTOR_ReceiveIT();
        }
 }
 
@@ -208,8 +196,6 @@ int main(void)
     DB_TRACE(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
     DB_TRACE(" * RAIN Sensor enable\r\n");
-    HALLSTOP_Sensor_Init();
-    DB_TRACE(" * HALL Sensor enabled\r\n");
 
     if (SPIFLASH_TestDevice())
     {        
@@ -262,9 +248,6 @@ int main(void)
     #ifdef BLADEMOTOR_USART_ENABLED
         BLADEMOTOR_Init();
     #endif
-    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
-      ULTRASONICSENSOR_Init();
-    #endif
     
 
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
@@ -276,13 +259,9 @@ int main(void)
 	  NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
 	  NBT_init(&main_emergency_nbt, 10);
-    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
-    NBT_init(&main_ultrasonicsensor_nbt, 50);
-#endif    
     NBT_init(&main_blademotor_nbt, 100);
     NBT_init(&main_drivemotor_nbt, 20);
     NBT_init(&main_wdg_nbt,10);
-    NBT_init(&main_buzzer_nbt,200);
 
     DB_TRACE(" * NBT Main timers initialized\r\n");
 
@@ -311,11 +290,6 @@ int main(void)
         broadcast_handler();   
         DRIVEMOTOR_App_Rx();
       //Perimeter_vApp();
-      /* try to send ros message without delay*/
-      if(ULTRASONIC_MessageReceived() == 1){
-        ultrasonic_handler();
-      }
-
         if (NBT_handler(&main_chargecontroller_nbt))
         {            
             ChargeController();
@@ -325,16 +299,6 @@ int main(void)
             StatusLEDUpdate();                                 
 
             // DB_TRACE("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);
-        }
-    #if(DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
-      if (NBT_handler(&main_ultrasonicsensor_nbt))
-	    {
-			  ULTRASONICSENSOR_App();
-	    }
-    #endif
-        if (NBT_handler(&main_wdg_nbt))
-        {            
-            WATCHDOG_Refresh();                   
         }
         if (NBT_handler(&main_drivemotor_nbt))
         {            
@@ -360,24 +324,6 @@ int main(void)
         currentTick = HAL_GetTick();
         DB_TRACE("t: %d \n",(currentTick-old_tick));
         old_tick = currentTick;
-        }
-
-        if (NBT_handler(&main_buzzer_nbt))
-        {            
-              // TODO 
-            if (do_chirp)
-            {
-              TIM3_Handle.Instance->CCR4 = 10; // chirp on
-            TIM4_Handle.Instance->CCR3 = 10; // chirp on
-              do_chirp = 0;
-              do_chirp_duration_counter = 0;
-            }
-            if (do_chirp_duration_counter == 1)
-            {
-              TIM3_Handle.Instance->CCR4 = 0; // chirp off
-            TIM4_Handle.Instance->CCR3 = 0; // chirp off
-            }
-            do_chirp_duration_counter++;
         }
 #ifndef I_DONT_NEED_MY_FINGERS
         if (NBT_handler(&main_emergency_nbt))
@@ -1445,81 +1391,7 @@ void MASTER_Transmit(uint8_t *buffer, uint8_t len)
     HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t*)master_tx_buffer, master_tx_buffer_len); // send message via UART       
 }
 
-/*
- * Initialize Watchdog - not tested yet (by Nekraus)
- */
-static void WATCHDOG_vInit(void)
-{
-  #if defined(DB_ACTIVE)
-    /* setup DBGMCU block - stop IWDG at break in debug mode */
-        __HAL_FREEZE_IWDG_DBGMCU();
-  #endif  /* DB_ACTIVE */
-
-  /* change the period to 50ms */
-  IwdgHandle.Instance = IWDG;
-  IwdgHandle.Init.Prescaler = IWDG_PRESCALER_256;
-  IwdgHandle.Init.Reload = 0xFFF;
-  /* Enable IWDG (LSI automatically enabled by HW) */
-
-  /* if window feature is not applied Init() precedes Start() */
-  if( HAL_IWDG_Init(&IwdgHandle) != HAL_OK )
-  {
-    #ifdef DB_ACTIVE
-      DB_TRACE(" IWDG init Error\n\r");
-    #endif  /* DB_ACTIVE */
-  }
-
-  /* Initialize WWDG for run time if applicable */
-  #if defined(DB_ACTIVE)
-    /* setup DBGMCU block - stop WWDG at break in debug mode */
-    __HAL_FREEZE_WWDG_DBGMCU();
-  #endif  /* DB_ACTIVE */
-
-  /* Setup period - 20ms */
-  __WWDG_CLK_ENABLE();
-  WwdgHandle.Instance = WWDG;
-  WwdgHandle.Init.Prescaler = WWDG_PRESCALER_8;
-  WwdgHandle.Init.Counter = 0x7F; /* 40.02 ms*/
-  WwdgHandle.Init.Window = 0x7F; /* 0ms */
-  //if( HAL_WWDG_Init(&WwdgHandle) != HAL_OK )
-  {
-    #ifdef DB_ACTIVE
-      DB_TRACE(" WWDG init Error\n\r");
-    #endif  /* DB_ACTIVE */
-  }
-} /* WATCHDOG_vInit() */
-
-/*
- * Feed the watchdog every 10ms
- */
-static void WATCHDOG_Refresh(void){
-  /* Update WWDG counter */
-  WwdgHandle.Instance = WWDG;
-  if( HAL_WWDG_Refresh(&WwdgHandle) != HAL_OK )
-  {
-    #ifdef DB_ACTIVE
-      DB_TRACE(" WWDG refresh error\n\r");
-    #endif  /* DB_ACTIVE */
-
-  }
-
-  /* Reload IWDG counter */
-  IwdgHandle.Instance = IWDG;
-  if( HAL_IWDG_Refresh(&IwdgHandle) != HAL_OK )
-  {
-    #ifdef DB_ACTIVE
-      DB_TRACE(" IWDG refresh error\n\r");
-    #endif  /* DB_ACTIVE */
-  }
-}
-
-
 void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
-
-  if(hadc == &ADC_Handle){
-    PERIMETER_vITHandle();
-  }
-
   if(hadc == &ADC2_Handle){
     uint16_t l_u16Rawdata = ADC2_Handle.Instance->DR;
     float tmp;
