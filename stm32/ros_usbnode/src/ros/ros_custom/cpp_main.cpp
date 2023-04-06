@@ -372,9 +372,9 @@ extern "C" void broadcast_handler()
 		} else {
 			om_mower_status_msg.v_charge = 0.0;
 		}
-		om_mower_status_msg.esc_power = mower_msgs::Status::MOWER_STATUS_OK;
-		om_mower_status_msg.raspberry_pi_power = mower_msgs::Status::MOWER_STATUS_OK;
-		om_mower_status_msg.gps_power = mower_msgs::Status::MOWER_STATUS_OK;
+		om_mower_status_msg.esc_power = true;
+		om_mower_status_msg.raspberry_pi_power = true;
+		om_mower_status_msg.gps_power = true;
 		om_mower_status_msg.charge_current = charge_current;
 		om_mower_status_msg.v_battery = battery_voltage;
 		om_mower_status_msg.left_esc_status.current = left_power;
