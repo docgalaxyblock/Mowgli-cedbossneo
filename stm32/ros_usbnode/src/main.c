@@ -92,8 +92,6 @@ UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 SPI_HandleTypeDef SPI3_Handle;
 
 // Drive Motors DMA
-DMA_HandleTypeDef hdma_usart2_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart4_tx;
 
@@ -111,7 +109,7 @@ typedef enum
 } ADC2_channelSelection_e;
 ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
 void adc2_SetChannel(ADC2_channelSelection_e channel);
-void ADC2_Init();
+
 TIM_HandleTypeDef TIM1_Handle; // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle; // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle; // PWM Beeper

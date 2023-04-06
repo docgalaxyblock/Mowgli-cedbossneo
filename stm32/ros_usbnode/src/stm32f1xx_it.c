@@ -221,20 +221,6 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles DMA1 channel1 global interrupt.
-  */
-void DMA1_Channel1_IRQHandler(void)
-{
-    /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
-
-    /* USER CODE END DMA1_Channel1_IRQn 0 */
-    HAL_DMA_IRQHandler(&hdma_adc);
-    /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
-
-    /* USER CODE END DMA1_Channel1_IRQn 1 */
-}
-
-/**
   * @brief This function handles ADC 1 & 2 global interrupt.
   */
   void ADC1_2_IRQHandler(void)
@@ -288,6 +274,20 @@ void DMA1_Channel1_IRQHandler(void)
   {           
     HAL_UART_IRQHandler(&MASTER_USART_Handler);   
   }
+
+/**
+  * @brief This function handles DMA1 channel1 global interrupt.
+  */
+void DMA1_Channel1_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel1_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_adc);
+  /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel1_IRQn 1 */
+}
 
 /**
   * @brief This function handles DMA1 channel2 global interrupt.

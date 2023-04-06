@@ -205,8 +205,6 @@ void i2c_start_condition(void)
     sda_low();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     scl_low();
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME << 1);
 }
 
 void i2c_stop_condition(void)
@@ -232,7 +230,7 @@ uint8_t i2c_check_ack(void)
     ack = FALSE;
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    for (i = 10; i > 0; i--)
+    for (i = 50; i > 0; i--)
     {
         temp = !(SW_I2C_ReadVal_SDA());	//0=ack , 1=nack
         if (temp)	// if ack, enter
