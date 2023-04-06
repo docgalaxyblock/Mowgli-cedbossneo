@@ -68,7 +68,7 @@ void SW_I2C_Init(void)
     
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
 
 
     GPIO_InitStruct.Pin   = SW_I2C1_SCL_PIN;
@@ -176,8 +176,7 @@ void scl_out_mode(void)
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;		// error point GPIO_Mode_Out_PP	
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;		// error point GPIO_Mode_Out_PP
 
     GPIO_InitStruct.Pin   = SW_I2C1_SCL_PIN;
     HAL_GPIO_Init(SW_I2C1_SCL_GPIO, &GPIO_InitStruct);
@@ -206,6 +205,8 @@ void i2c_start_condition(void)
     sda_low();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     scl_low();
+
+    TIMER__Wait_us(SW_I2C_WAIT_TIME << 1);
 }
 
 void i2c_stop_condition(void)
@@ -231,7 +232,7 @@ uint8_t i2c_check_ack(void)
     ack = FALSE;
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    for (i = 50; i > 0; i--)
+    for (i = 10; i > 0; i--)
     {
         temp = !(SW_I2C_ReadVal_SDA());	//0=ack , 1=nack
         if (temp)	// if ack, enter

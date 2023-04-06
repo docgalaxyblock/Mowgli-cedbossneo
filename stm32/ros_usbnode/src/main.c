@@ -519,8 +519,7 @@ void SPI3_Init()
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   // Disable JTAG only to free PA15, PB3* and PB4. SWD remains active
-  RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
-  __HAL_AFIO_REMAP_SWJ_NOJTAG();
+    MODIFY_REG(AFIO->MAPR, AFIO_MAPR_SWJ_CFG, AFIO_MAPR_SWJ_CFG_JTAGDISABLE);
 
   __HAL_RCC_SPI3_CLK_ENABLE();
   FLASH_SPI_CLK_ENABLE();
