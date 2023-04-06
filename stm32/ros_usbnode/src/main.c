@@ -92,6 +92,8 @@ UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 SPI_HandleTypeDef SPI3_Handle;
 
 // Drive Motors DMA
+DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart4_tx;
 
@@ -1338,10 +1340,8 @@ void chirp(uint8_t count)
   for (i = 0; i < count; i++)
   {
     TIM3_Handle.Instance->CCR4 = 10;
-    TIM4_Handle.Instance->CCR3 = 10;
     HAL_Delay(100);
     TIM3_Handle.Instance->CCR4 = 0;
-    TIM4_Handle.Instance->CCR3 = 0;
     HAL_Delay(50);
   }
 }

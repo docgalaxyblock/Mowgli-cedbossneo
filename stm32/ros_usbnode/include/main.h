@@ -110,6 +110,7 @@ void RAIN_Sensor_Init();
 void PAC5210RESET_Init();
 void MASTER_USART_Init();
 void DRIVEMOTORS_USART_Init();
+void BLADEMOTOR_USART_Init();
 void SystemClock_Config();
 void ADC2_Init(void);
 void TIM1_Init(void);
