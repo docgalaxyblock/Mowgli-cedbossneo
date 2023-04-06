@@ -66,12 +66,15 @@ extern UART_HandleTypeDef BLADEMOTOR_USART_Handler;
 extern PCD_HandleTypeDef hpcd_USB_FS;
 
 
+extern DMA_HandleTypeDef hdma_uart1_tx;
+extern DMA_HandleTypeDef hdma_uart1_rx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
 extern DMA_HandleTypeDef hdma_uart3_tx;
 extern DMA_HandleTypeDef hdma_uart3_rx;
 extern DMA_HandleTypeDef hdma_uart4_tx;
 extern DMA_HandleTypeDef hdma_uart4_rx;
+extern DMA_HandleTypeDef hdma_adc;
 
 extern ADC_HandleTypeDef ADC2_Handle;
 
@@ -218,6 +221,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles DMA1 channel1 global interrupt.
+  */
+void DMA1_Channel1_IRQHandler(void)
+{
+    /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
+
+    /* USER CODE END DMA1_Channel1_IRQn 0 */
+    HAL_DMA_IRQHandler(&hdma_adc);
+    /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
+
+    /* USER CODE END DMA1_Channel1_IRQn 1 */
+}
+
+/**
   * @brief This function handles ADC 1 & 2 global interrupt.
   */
   void ADC1_2_IRQHandler(void)
@@ -288,6 +305,21 @@ void DMA1_Channel3_IRQHandler(void)
   HAL_DMA_IRQHandler(&hdma_uart3_rx);
 }
 
+/**
+  * @brief This function handles DMA1 channel4 global interrupt.
+  */
+void DMA1_Channel4_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_uart1_tx);
+}
+
+/**
+  * @brief This function handles DMA1 channel5 global interrupt.
+  */
+void DMA1_Channel5_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_uart1_rx);
+}
 
 
 /**
