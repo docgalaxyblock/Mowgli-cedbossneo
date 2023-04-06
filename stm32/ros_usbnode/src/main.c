@@ -41,7 +41,7 @@
 #include "cpp_main.h"
 #include "ringbuffer.h"
 
-static void WATCHDOG_Refresh(void); 
+static void WATCHDOG_Refresh(void);
 
 static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
@@ -50,15 +50,15 @@ static nbt_t main_drivemotor_nbt;
 static nbt_t main_wdg_nbt;
 static nbt_t main_buzzer_nbt;
 #ifdef BLADEMOTOR_USART_ENABLED
-  static nbt_t main_blademotor_nbt;
+static nbt_t main_blademotor_nbt;
 #endif
 
 // MASTER tx buffering
-volatile uint8_t  master_tx_busy = 0;
+volatile uint8_t master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
 static char master_tx_buffer[255];
 
-typedef enum{
+typedef enum {
     CHARGER_STATE_IDLE,
     CHARGER_STATE_CONNECTED,
     CHARGER_STATE_CHARGING_CC,
@@ -67,15 +67,15 @@ typedef enum{
 } CHARGER_STATE_e;
 
 /* union to store a float in the U16 backup register */
-union FtoU{
-    float_t  f;
+union FtoU {
+    float_t f;
     uint16_t u[2];
 };
 
 int blade_motor = 0;
 
 static uint8_t panel_rcvd_data;
-volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage,input_PC3;
+volatile float batteryVoltage, current, chargerVoltage, chargerInputVoltage, input_PC3;
 
 union FtoU ampere_acc;
 union FtoU charge_current_offset;
@@ -89,7 +89,7 @@ float_t charge_voltage;
 float_t charge_current;
 float_t blade_temperature;
 uint16_t chargecontrol_pwm_val = MIN_CHARGE_PWM;
-uint8_t  chargecontrol_is_charging = 0;
+uint8_t chargecontrol_is_charging = 0;
 
 
 UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
@@ -110,7 +110,7 @@ DMA_HandleTypeDef hdma_uart4_tx;
 /*ADC variables */
 ADC_HandleTypeDef ADC2_Handle;
 
-typedef enum{
+typedef enum {
     ADC2_CHANNEL_CURRENT = 0,
     ADC2_CHANNEL_CHARGEVOLTAGE,
     ADC2_CHANNEL_BATTERYVOLTAGE,
@@ -119,8 +119,11 @@ typedef enum{
     ADC2_CHANNEL_MAX,
 } ADC2_channelSelection_e;
 ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+
 void adc2_SetChannel(ADC2_channelSelection_e channel);
+
 void ADC2_Init();
+
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
@@ -129,71 +132,58 @@ WWDG_HandleTypeDef WwdgHandle = {0};
 
 RTC_HandleTypeDef hrtc = {0};
 
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-   // do nothing here
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+    // do nothing here
 }
 
 /*
  * called when DMA transfer completes
  * update <xxxx>_tx_busy to let XXXX_Transmit function now when the DMA buffer is free 
  */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{   
-    if (huart->Instance == MASTER_USART_INSTANCE)
-    {
-        if (__HAL_USART_GET_FLAG(&MASTER_USART_Handler, USART_FLAG_TC))        
-        {
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == MASTER_USART_INSTANCE) {
+        if (__HAL_USART_GET_FLAG(&MASTER_USART_Handler, USART_FLAG_TC)) {
             master_tx_busy = 0;
         }
     }
 }
 
-void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart)
-{
-   // do nothing here
+void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart) {
+    // do nothing here
 }
 
 /*
  * Master UART receive ISR
  * DriveMotors UART receive ISR
  * PANEL UART receive ISR
- */ 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{                  
-       if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
-       {
-            DRIVEMOTOR_ReceiveIT();
-       }       
-       else if(huart->Instance == PANEL_USART_INSTANCE)
-       {
-           PANEL_Handle_Received_Data(panel_rcvd_data);
-           HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
-       }
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == DRIVEMOTORS_USART_INSTANCE) {
+        DRIVEMOTOR_ReceiveIT();
+    }
 #ifdef BLADEMOTOR_USART_ENABLED
-       else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
-       {
-            BLADEMOTOR_ReceiveIT();
-       }
-#endif       
-#ifdef HAS_ULTRASONIC_SENSOR    
-       else if (huart->Instance == MASTER_USART_INSTANCE)
-       {
-            ULTRASONICSENSOR_ReceiveIT();       
-       }
-#endif        
+    else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
+    {
+         BLADEMOTOR_ReceiveIT();
+    }
+#endif
+#ifdef HAS_ULTRASONIC_SENSOR
+    else if (huart->Instance == MASTER_USART_INSTANCE)
+    {
+         ULTRASONICSENSOR_ReceiveIT();
+    }
+#endif
 }
 
-int main(void)
-{    
+int main(void) {
     HAL_Init();
     SystemClock_Config();
 
-    __HAL_RCC_AFIO_CLK_ENABLE();    
+    __HAL_RCC_AFIO_CLK_ENABLE();
     __HAL_RCC_PWR_CLK_ENABLE();
 
     MX_DMA_Init();
-    
+
     MASTER_USART_Init();
 
     debug_printf("\r\n");
@@ -211,39 +201,33 @@ int main(void)
     TIM2_Init();
     ADC2_Init();
     TIM3_Init();
-    HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);    
+    HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);
     debug_printf(" * Timer3 (Beeper) initialized\r\n");
     TF4_Init();
     debug_printf(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
     debug_printf(" * RAIN Sensor enable\r\n");
 
-    if (SPIFLASH_TestDevice())
-    {        
+    if (SPIFLASH_TestDevice()) {
         SPIFLASH_Config();
         SPIFLASH_IncBootCounter();
+    } else {
+        debug_printf(" * SPIFLASH: unable to locate SPI Flash\r\n");
     }
-    else
-    {
-         debug_printf(" * SPIFLASH: unable to locate SPI Flash\r\n");    
-    }    
     debug_printf(" * SPIFLASH initialized\r\n");
 
     I2C_Init();
     debug_printf(" * Hard I2C initialized\r\n");
-    if (I2C_Acclerometer_TestDevice())
-    {
-         I2C_Accelerometer_Setup();          
-    }
-    else
-    {
-        chirp(3);        
+    if (I2C_Acclerometer_TestDevice()) {
+        I2C_Accelerometer_Setup();
+    } else {
+        chirp(3);
         debug_printf(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
-    }    
-    debug_printf(" * Accelerometer (onboard/tilt safety) initialized\r\n");    
+    }
+    debug_printf(" * Accelerometer (onboard/tilt safety) initialized\r\n");
     SW_I2C_Init();
     debug_printf(" * Soft I2C (J18) initialized\r\n");
-#ifdef HAS_EXT_IMU    
+#ifdef HAS_EXT_IMU
     debug_printf(" * Testing supported external IMUs:\r\n");
     IMU_TestDevice();
     IMU_Init();
@@ -252,11 +236,11 @@ int main(void)
     debug_printf(" * External IMU not enabled !\r\n");
 #endif
     debug_printf(" * Onboard IMU:\r\n");
-    IMU_CalibrateOnboard();    
+    IMU_CalibrateOnboard();
     Emergency_Init();
     debug_printf(" * Emergency sensors initialized\r\n");
-    TIM1_Init();   
-    debug_printf(" * Timer1 (Charge PWM) initialized\r\n");    
+    TIM1_Init();
+    debug_printf(" * Timer1 (Charge PWM) initialized\r\n");
     MX_USB_DEVICE_Init();
     debug_printf(" * USB CDC initialized\r\n");
     PANEL_Init();
@@ -266,17 +250,17 @@ int main(void)
     HAL_TIM_PWM_Start(&TIM1_Handle, TIM_CHANNEL_1);
     HAL_TIMEx_PWMN_Start(&TIM1_Handle, TIM_CHANNEL_1);
     debug_printf(" * Charge Controler PWM Timers initialized\r\n");
-    
+
     // Init Drive Motors and Blade Motor
-    #ifdef DRIVEMOTORS_USART_ENABLED
-        DRIVEMOTOR_Init();
-        debug_printf(" * Drive Motors USART initialized\r\n");        
-    #endif
-    #ifdef BLADEMOTOR_USART_ENABLED
-        BLADEMOTOR_Init();
-        debug_printf(" * Blade Motor USART initialized\r\n");
-    #endif
-    
+#ifdef DRIVEMOTORS_USART_ENABLED
+    DRIVEMOTOR_Init();
+    debug_printf(" * Drive Motors USART initialized\r\n");
+#endif
+#ifdef BLADEMOTOR_USART_ENABLED
+    BLADEMOTOR_Init();
+    debug_printf(" * Blade Motor USART initialized\r\n");
+#endif
+
 
     HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
     debug_printf(" * Panel Interrupt enabled\r\n");
@@ -287,57 +271,51 @@ int main(void)
 
 
     // Initialize Main Timers
-	  NBT_init(&main_chargecontroller_nbt, 10);
+    NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
-	  NBT_init(&main_emergency_nbt, 10);
-#ifdef BLADEMOTOR_USART_ENABLED    
+    NBT_init(&main_emergency_nbt, 10);
+#ifdef BLADEMOTOR_USART_ENABLED
     NBT_init(&main_blademotor_nbt, 100);
-#endif    
-    NBT_init(&main_drivemotor_nbt, 10);
-    NBT_init(&main_wdg_nbt,10);
-    NBT_init(&main_buzzer_nbt,200);
-    debug_printf(" * NBT Main timers initialized\r\n");     
+#endif
+    NBT_init(&main_drivemotor_nbt, 20);
+    NBT_init(&main_wdg_nbt, 10);
+    debug_printf(" * NBT Main timers initialized\r\n");
 
- #ifdef I_DONT_NEED_MY_FINGERS
+#ifdef I_DONT_NEED_MY_FINGERS
     debug_printf("\r\n");
     debug_printf("=========================================================\r\n");
     debug_printf(" EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
     debug_printf("=========================================================\r\n");
     debug_printf("\r\n");
- #endif
+#endif
     // Initialize ROS
     init_ROS();
-    debug_printf(" * ROS serial node initialized\r\n");     
-    debug_printf("\r\n >>> entering main loop ...\r\n\r\n"); 
+    debug_printf(" * ROS serial node initialized\r\n");
+    debug_printf("\r\n >>> entering main loop ...\r\n\r\n");
     // <chirp><chirp> means we are in the main loop 
-    chirp(2);    
-    while (1)
-    {        
+    chirp(2);
+    while (1) {
         chatter_handler();
-        motors_handler();    
+        motors_handler();
         panel_handler();
-        spinOnce();                                   
-        broadcast_handler();   
+        spinOnce();
+        broadcast_handler();
         DRIVEMOTOR_App_Rx();
 
-        if (NBT_handler(&main_chargecontroller_nbt))
-        {            
+        if (NBT_handler(&main_chargecontroller_nbt)) {
             ChargeController();
         }
-        if (NBT_handler(&main_statusled_nbt))
-        {            
-            StatusLEDUpdate();                                 
-              // debug_printf("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);           
+        if (NBT_handler(&main_statusled_nbt)) {
+            StatusLEDUpdate();
+            // debug_printf("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);
         }
-        if (NBT_handler(&main_wdg_nbt))
-        {            
-            WATCHDOG_Refresh();                   
+        if (NBT_handler(&main_wdg_nbt)) {
+            WATCHDOG_Refresh();
         }
-        if (NBT_handler(&main_drivemotor_nbt))
-        {            
-            DRIVEMOTOR_App_10ms();      
+        if (NBT_handler(&main_drivemotor_nbt)) {
+            DRIVEMOTOR_App_10ms();
         }
-#ifdef BLADEMOTOR_USART_ENABLED        
+#ifdef BLADEMOTOR_USART_ENABLED
         if (NBT_handler(&main_blademotor_nbt))
         {            
         float f_tmp;
@@ -359,27 +337,11 @@ int main(void)
         old_tick = currentTick;
         }
 #endif
-        if (NBT_handler(&main_buzzer_nbt))
-        {            
-              // TODO 
-            if (do_chirp)
-            {
-              TIM3_Handle.Instance->CCR4 = 10; // chirp on
-              do_chirp = 0;
-              do_chirp_duration_counter = 0;
-            }
-            if (do_chirp_duration_counter == 1)
-            {
-              TIM3_Handle.Instance->CCR4 = 0; // chirp off
-            }
-            do_chirp_duration_counter++;
-        }
 #ifndef I_DONT_NEED_MY_FINGERS
-        if (NBT_handler(&main_emergency_nbt))
-        {
+        if (NBT_handler(&main_emergency_nbt)) {
             EmergencyController();
         }
-#endif        
+#endif
     }
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // we never get here ...
@@ -390,8 +352,7 @@ int main(void)
  * @brief Init the Master Serial Port  - this what connects to the upstream controller
  * @retval None
  */
-void MASTER_USART_Init()
-{
+void MASTER_USART_Init() {
     // enable port and usart clocks
     MASTER_USART_GPIO_CLK_ENABLE();
     MASTER_USART_USART_CLK_ENABLE();
@@ -421,7 +382,7 @@ void MASTER_USART_Init()
     MASTER_USART_Handler.Init.Mode = USART_MODE_TX_RX;         // Transceiver mode
 
     HAL_UART_Init(&MASTER_USART_Handler); // HAL_UART_Init() Will enable  UART1
-    
+
     /* UART4 DMA Init */
     /* UART4_RX Init */
     hdma_uart4_rx.Instance = DMA2_Channel3;
@@ -432,12 +393,11 @@ void MASTER_USART_Init()
     hdma_uart4_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_uart4_rx.Init.Mode = DMA_NORMAL;
     hdma_uart4_rx.Init.Priority = DMA_PRIORITY_LOW;
-    if (HAL_DMA_Init(&hdma_uart4_rx) != HAL_OK)
-    {
-      Error_Handler();
+    if (HAL_DMA_Init(&hdma_uart4_rx) != HAL_OK) {
+        Error_Handler();
     }
 
-    __HAL_LINKDMA(&MASTER_USART_Handler,hdmarx,hdma_uart4_rx);
+    __HAL_LINKDMA(&MASTER_USART_Handler, hdmarx, hdma_uart4_rx);
 
     /* UART4 DMA Init */
     /* UART4_TX Init */
@@ -449,16 +409,15 @@ void MASTER_USART_Init()
     hdma_uart4_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_uart4_tx.Init.Mode = DMA_NORMAL;
     hdma_uart4_tx.Init.Priority = DMA_PRIORITY_LOW;
-    if (HAL_DMA_Init(&hdma_uart4_tx) != HAL_OK)
-    {
-      Error_Handler();
+    if (HAL_DMA_Init(&hdma_uart4_tx) != HAL_OK) {
+        Error_Handler();
     }
 
-    __HAL_LINKDMA(&MASTER_USART_Handler,hdmatx,hdma_uart4_tx);
+    __HAL_LINKDMA(&MASTER_USART_Handler, hdmatx, hdma_uart4_tx);
 
     // enable IRQ
     HAL_NVIC_SetPriority(MASTER_USART_IRQ, 0, 0);
-	HAL_NVIC_EnableIRQ(MASTER_USART_IRQ);     
+    HAL_NVIC_EnableIRQ(MASTER_USART_IRQ);
 
     __HAL_UART_ENABLE_IT(&MASTER_USART_Handler, UART_IT_TC);
 }
@@ -468,8 +427,7 @@ void MASTER_USART_Init()
  * @brief Init LED
  * @retval None
  */
-void LED_Init()
-{
+void LED_Init() {
     LED_GPIO_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Pin = LED_PIN;
@@ -483,17 +441,15 @@ void LED_Init()
  * @brief Poll RAIN Sensor
  * @retval 1 if rain is detected, 0 if no rain
  */
-int RAIN_Sense(void)
-{
-  return(!HAL_GPIO_ReadPin(RAIN_SENSOR_PORT, RAIN_SENSOR_PIN)); // pullup, active low
+int RAIN_Sense(void) {
+    return (!HAL_GPIO_ReadPin(RAIN_SENSOR_PORT, RAIN_SENSOR_PIN)); // pullup, active low
 }
 
 /**
  * @brief Init RAIN Sensor (PE2) Input
  * @retval None
  */
-void RAIN_Sensor_Init()
-{
+void RAIN_Sensor_Init() {
     RAIN_SENSOR_GPIO_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Pin = RAIN_SENSOR_PIN;
@@ -508,8 +464,7 @@ void RAIN_Sensor_Init()
  * @brief Init TF4 (24V Power Switch)
  * @retval None
  */
-void TF4_Init()
-{
+void TF4_Init() {
     TF4_GPIO_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Pin = TF4_PIN;
@@ -523,8 +478,7 @@ void TF4_Init()
  * @brief PAC 5223 Reset Line (Blade Motor)
  * @retval None
  */
-void PAC5223RESET_Init()
-{
+void PAC5223RESET_Init() {
     PAC5223RESET_GPIO_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Pin = PAC5223RESET_PIN;
@@ -538,8 +492,7 @@ void PAC5223RESET_Init()
  * @brief PAC 5210 Reset Line (Drive Motors)
  * @retval None
  */
-void PAC5210RESET_Init()
-{
+void PAC5210RESET_Init() {
     PAC5210RESET_GPIO_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Pin = PAC5210RESET_PIN;
@@ -550,23 +503,22 @@ void PAC5210RESET_Init()
 
 
     // PD7 (->PAC5210 PC4), PD8 (->PAC5210 PC3)
-     __HAL_RCC_GPIOD_CLK_ENABLE();    
-    GPIO_InitStruct.Pin = GPIO_PIN_7| GPIO_PIN_8;
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7 | GPIO_PIN_8 , 1);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7 | GPIO_PIN_8, 1);
 }
 
 /**
  * @brief SPI3 Bus (onboard FLASH)
  * @retval None
  */
-void SPI3_Init()
-{
+void SPI3_Init() {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    
+
     // Disable JTAG only to free PA15, PB3* and PB4. SWD remains active
     RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
     __HAL_AFIO_REMAP_SWJ_NOJTAG();
@@ -584,13 +536,13 @@ void SPI3_Init()
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(FLASH_SPI_PORT, &GPIO_InitStruct);
-  
+
     GPIO_InitStruct.Pin = FLASH_nCS_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(FLASH_SPICS_PORT, &GPIO_InitStruct);
- 
+
     // now init HAL SPI3_Handle
     SPI3_Handle.Instance = SPI3;
     SPI3_Handle.Init.Mode = SPI_MODE_MASTER;
@@ -604,25 +556,23 @@ void SPI3_Init()
     SPI3_Handle.Init.TIMode = SPI_TIMODE_DISABLE;
     SPI3_Handle.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
     SPI3_Handle.Init.CRCPolynomial = 10;
-    if (HAL_SPI_Init(&SPI3_Handle) != HAL_OK)
-    {
+    if (HAL_SPI_Init(&SPI3_Handle) != HAL_OK) {
         Error_Handler();
-    }    
+    }
 }
 
 /**
  * @brief Deinit SPI3 Bus (onboard FLASH)
  * @retval None
  */
-void SPI3_DeInit()
-{        
+void SPI3_DeInit() {
     __HAL_RCC_SPI3_CLK_DISABLE();
-    
-    HAL_GPIO_DeInit(FLASH_SPI_PORT,FLASH_CLK_PIN | FLASH_MISO_PIN | FLASH_nCS_PIN);
-    HAL_GPIO_DeInit(FLASH_SPICS_PORT,FLASH_nCS_PIN);
 
-   // reactivate JTAG
-   __HAL_AFIO_REMAP_SWJ_ENABLE();
+    HAL_GPIO_DeInit(FLASH_SPI_PORT, FLASH_CLK_PIN | FLASH_MISO_PIN | FLASH_nCS_PIN);
+    HAL_GPIO_DeInit(FLASH_SPICS_PORT, FLASH_nCS_PIN);
+
+    // reactivate JTAG
+    __HAL_AFIO_REMAP_SWJ_ENABLE();
 }
 
 
@@ -630,15 +580,13 @@ void SPI3_DeInit()
  * @brief  This function is executed in case of error occurrence.
  * @retval None
  */
-void Error_Handler(void)
-{
+void Error_Handler(void) {
     /* USER CODE BEGIN Error_Handler_Debug */
     /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
-    while (1)
-    {
+    while (1) {
         debug_printf("Error Handler reached, oops\r\n");
-        chirp(1);        
+        chirp(1);
     }
     /* USER CODE END Error_Handler_Debug */
 }
@@ -651,56 +599,51 @@ void Error_Handler(void)
   * @brief System Clock Configuration
   * @retval None
   */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+void SystemClock_Config(void) {
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSI;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /** Initializes the RCC Oscillators according to the specified parameters
+    * in the RCC_OscInitTypeDef structure.
+    */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSI;
+    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+    RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+        Error_Handler();
+    }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    /** Initializes the CPU, AHB and APB buses clocks
+    */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+                                  | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC | RCC_PERIPHCLK_USB | RCC_PERIPHCLK_RTC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
-  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
-  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+        Error_Handler();
+    }
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC | RCC_PERIPHCLK_USB | RCC_PERIPHCLK_RTC;
+    PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
+    PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
+    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+        Error_Handler();
+    }
 }
 
 /*
  * VREF+ = 3.3v
  */
-void ADC2_Init(void)
-{
+void ADC2_Init(void) {
 
     __HAL_RCC_ADC2_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -712,7 +655,7 @@ void ADC2_Init(void)
     PA3     ------> Battery Voltage
     PA7     ------> Charger Voltage
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_7;
+    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -737,109 +680,100 @@ void ADC2_Init(void)
     ADC2_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_CC2;
     ADC2_Handle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
     ADC2_Handle.Init.NbrOfConversion = 1;
-    if (HAL_ADC_Init(&ADC2_Handle) != HAL_OK)
-    {
+    if (HAL_ADC_Init(&ADC2_Handle) != HAL_OK) {
         Error_Handler();
     }
 
-  adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
-  adc2_SetChannel(adc2_eChannelSelection);
+    adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+    adc2_SetChannel(adc2_eChannelSelection);
 
 
-
-  HAL_NVIC_SetPriority(ADC1_2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(ADC1_2_IRQn);
+    HAL_NVIC_SetPriority(ADC1_2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(ADC1_2_IRQn);
 
     // calibrate  - important for accuracy !
-  HAL_ADCEx_Calibration_Start(&ADC2_Handle);
-  HAL_ADC_Start_IT(&ADC2_Handle);
-  HAL_TIM_OC_Start(&TIM2_Handle,TIM_CHANNEL_2);
+    HAL_ADCEx_Calibration_Start(&ADC2_Handle);
+    HAL_ADC_Start_IT(&ADC2_Handle);
+    HAL_TIM_OC_Start(&TIM2_Handle, TIM_CHANNEL_2);
 
     /* USER CODE BEGIN RTC_MspInit 0 */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  /* USER CODE END RTC_MspInit 0 */
-  /* Enable BKP CLK enable for backup registers */
-  __HAL_RCC_BKP_CLK_ENABLE();
-  /* Peripheral clock enable */
-  __HAL_RCC_RTC_ENABLE();
-  /* USER CODE BEGIN RTC_MspInit 1 */
-  HAL_PWR_EnableBkUpAccess();
+    __HAL_RCC_PWR_CLK_ENABLE();
+    /* USER CODE END RTC_MspInit 0 */
+    /* Enable BKP CLK enable for backup registers */
+    __HAL_RCC_BKP_CLK_ENABLE();
+    /* Peripheral clock enable */
+    __HAL_RCC_RTC_ENABLE();
+    /* USER CODE BEGIN RTC_MspInit 1 */
+    HAL_PWR_EnableBkUpAccess();
 
-  ampere_acc.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1);
-  ampere_acc.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2);
+    ampere_acc.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1);
+    ampere_acc.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2);
 
-  charge_current_offset.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR3);
-  charge_current_offset.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR4);
+    charge_current_offset.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR3);
+    charge_current_offset.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR4);
 }
 
-void adc2_SetChannel(ADC2_channelSelection_e channel){
+void adc2_SetChannel(ADC2_channelSelection_e channel) {
 
-  ADC_ChannelConfTypeDef sConfig = {0};
+    ADC_ChannelConfTypeDef sConfig = {0};
 
-  switch (channel)
-  {
-  case ADC2_CHANNEL_CURRENT:
-    sConfig.Channel = ADC_CHANNEL_1; // PA1 Charge Current
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
+    switch (channel) {
+        case ADC2_CHANNEL_CURRENT:
+            sConfig.Channel = ADC_CHANNEL_1; // PA1 Charge Current
+            sConfig.Rank = ADC_REGULAR_RANK_1;
+            sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+            if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK) {
+                Error_Handler();
+            }
+            break;
+
+        case ADC2_CHANNEL_CHARGEVOLTAGE:
+            sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge Voltage
+            sConfig.Rank = ADC_REGULAR_RANK_1;
+            sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+            if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK) {
+                Error_Handler();
+            }
+            break;
+
+        case ADC2_CHANNEL_BATTERYVOLTAGE:
+            sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
+            sConfig.Rank = ADC_REGULAR_RANK_1;
+            sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+            if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK) {
+                Error_Handler();
+            }
+            break;
+
+        case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
+            sConfig.Channel = ADC_CHANNEL_7; // PA7 Charger Input voltage
+            sConfig.Rank = ADC_REGULAR_RANK_1;
+            sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+            if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK) {
+                Error_Handler();
+            }
+            break;
+
+        case ADC2_CHANNEL_PC2:
+            sConfig.Channel = ADC_CHANNEL_13; // PC2
+            sConfig.Rank = ADC_REGULAR_RANK_1;
+            sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+            if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK) {
+                Error_Handler();
+            }
+            break;
+
+        case ADC2_CHANNEL_MAX:
+        default:
+            /* should not get here */
+            sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
+            sConfig.Rank = ADC_REGULAR_RANK_1;
+            sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+            if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK) {
+                Error_Handler();
+            }
+            break;
     }
-    break;
-
-  case ADC2_CHANNEL_CHARGEVOLTAGE:
-    sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge Voltage
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    break;
-
-  case ADC2_CHANNEL_BATTERYVOLTAGE:
-    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    break;
-
-  case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
-    sConfig.Channel = ADC_CHANNEL_7; // PA7 Charger Input voltage
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    break;
-
-  case ADC2_CHANNEL_PC2:
-    sConfig.Channel = ADC_CHANNEL_13; // PC2
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    break;
-
-  case ADC2_CHANNEL_MAX:
-  default:
-    /* should not get here */
-    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    break;
-  }
 }
 
 /**
@@ -847,94 +781,88 @@ void adc2_SetChannel(ADC2_channelSelection_e channel){
   * @param None
   * @retval None
   */
- void TIM1_Init(void)
-{
+void TIM1_Init(void) {
 
-  /* USER CODE BEGIN TIM1_Init 0 */
+    /* USER CODE BEGIN TIM1_Init 0 */
 
-  __HAL_RCC_TIM1_CLK_ENABLE();
-  /* USER CODE END TIM1_Init 0 */
+    __HAL_RCC_TIM1_CLK_ENABLE();
+    /* USER CODE END TIM1_Init 0 */
 
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+    TIM_ClockConfigTypeDef sClockSourceConfig = {0};
 
-  /* USER CODE BEGIN TIM1_Init 1 */
+    /* USER CODE BEGIN TIM1_Init 1 */
 
-  /* USER CODE END TIM1_Init 1 */
-  TIM1_Handle.Instance = TIM1;
-  TIM1_Handle.Init.Prescaler = 0;
-  TIM1_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  TIM1_Handle.Init.Period = 1400;
-  TIM1_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  TIM1_Handle.Init.RepetitionCounter = 0;
-  TIM1_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_PWM_Init(&TIM1_Handle) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /* USER CODE END TIM1_Init 1 */
+    TIM1_Handle.Instance = TIM1;
+    TIM1_Handle.Init.Prescaler = 0;
+    TIM1_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+    TIM1_Handle.Init.Period = 1400;
+    TIM1_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    TIM1_Handle.Init.RepetitionCounter = 0;
+    TIM1_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_PWM_Init(&TIM1_Handle) != HAL_OK) {
+        Error_Handler();
+    }
 
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&TIM1_Handle, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+    if (HAL_TIM_ConfigClockSource(&TIM1_Handle, &sClockSourceConfig) != HAL_OK) {
+        Error_Handler();
+    }
 
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&TIM1_Handle, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    if (HAL_TIMEx_MasterConfigSynchronization(&TIM1_Handle, &sMasterConfig) != HAL_OK) {
+        Error_Handler();
+    }
 
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 120;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&TIM1_Handle, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 120;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+    if (HAL_TIM_PWM_ConfigChannel(&TIM1_Handle, &sConfigOC, TIM_CHANNEL_1) != HAL_OK) {
+        Error_Handler();
+    }
 
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_1;
-  sBreakDeadTimeConfig.DeadTime = 40;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&TIM1_Handle, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;
+    sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;
+    sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_1;
+    sBreakDeadTimeConfig.DeadTime = 40;
+    sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+    sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+    sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;
+    if (HAL_TIMEx_ConfigBreakDeadTime(&TIM1_Handle, &sBreakDeadTimeConfig) != HAL_OK) {
+        Error_Handler();
+    }
 
-  /* USER CODE BEGIN TIM1_Init 2 */
+    /* USER CODE BEGIN TIM1_Init 2 */
 
-  /* USER CODE END TIM1_Init 2 */
+    /* USER CODE END TIM1_Init 2 */
 
-  GPIO_InitTypeDef GPIO_InitStruct = {0};  
-  CHARGE_GPIO_CLK_ENABLE();
-  /** TIM1 GPIO Configuration
-  PA7 or PE8     -----> TIM1_CH1N
-  PA8 oe PE9    ------> TIM1_CH1
-  */
-  GPIO_InitStruct.Pin = CHARGE_LOWSIDE_PIN|CHARGE_HIGHSIDE_PIN;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CHARGE_GPIO_PORT, &GPIO_InitStruct);
-  #ifdef BOARD_BLUEPILL
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    CHARGE_GPIO_CLK_ENABLE();
+    /** TIM1 GPIO Configuration
+    PA7 or PE8     -----> TIM1_CH1N
+    PA8 oe PE9    ------> TIM1_CH1
+    */
+    GPIO_InitStruct.Pin = CHARGE_LOWSIDE_PIN | CHARGE_HIGHSIDE_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(CHARGE_GPIO_PORT, &GPIO_InitStruct);
+#ifdef BOARD_BLUEPILL
     __HAL_AFIO_REMAP_TIM1_PARTIAL();        // to use PA7/8 it is a partial remap
-  #endif
-  #ifdef BOARD_YARDFORCE500 
-     __HAL_AFIO_REMAP_TIM1_ENABLE();        // to use PE8/9 it is a full remap
-  #endif  
-  #ifdef BOARD_YARDFORCE500_BAGHEERA
+#endif
+#ifdef BOARD_YARDFORCE500
     __HAL_AFIO_REMAP_TIM1_ENABLE();        // to use PE8/9 it is a full remap
-  #endif
+#endif
+#ifdef BOARD_YARDFORCE500_BAGHEERA
+    __HAL_AFIO_REMAP_TIM1_ENABLE();        // to use PE8/9 it is a full remap
+#endif
 }
 
 /**
@@ -945,8 +873,7 @@ void adc2_SetChannel(ADC2_channelSelection_e channel){
   * @param None
   * @retval None
   */
-void TIM2_Init(void)
-{
+void TIM2_Init(void) {
 
     /* USER CODE BEGIN TIM2_Init 0 */
     __HAL_RCC_TIM2_CLK_ENABLE();
@@ -961,25 +888,22 @@ void TIM2_Init(void)
 
     /* USER CODE END TIM2_Init 1 */
     TIM2_Handle.Instance = TIM2;
-    TIM2_Handle.Init.Prescaler = 18-1; // 72Mhz -> 4Mhz
+    TIM2_Handle.Init.Prescaler = 18 - 1; // 72Mhz -> 4Mhz
     TIM2_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-    TIM2_Handle.Init.Period = 1000-1; /*1khz*/
+    TIM2_Handle.Init.Period = 1000 - 1; /*1khz*/
     TIM2_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
     TIM2_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-    if (HAL_TIM_OC_Init(&TIM2_Handle) != HAL_OK)
-    {
+    if (HAL_TIM_OC_Init(&TIM2_Handle) != HAL_OK) {
         Error_Handler();
     }
     sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-    if (HAL_TIM_ConfigClockSource(&TIM2_Handle, &sClockSourceConfig) != HAL_OK)
-    {
+    if (HAL_TIM_ConfigClockSource(&TIM2_Handle, &sClockSourceConfig) != HAL_OK) {
         Error_Handler();
     }
 
     sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
     sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-    if (HAL_TIMEx_MasterConfigSynchronization(&TIM2_Handle, &sMasterConfig) != HAL_OK)
-    {
+    if (HAL_TIMEx_MasterConfigSynchronization(&TIM2_Handle, &sMasterConfig) != HAL_OK) {
         Error_Handler();
     }
 
@@ -987,8 +911,7 @@ void TIM2_Init(void)
     sConfigOC.Pulse = 5;
     sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
     sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-    if (HAL_TIM_OC_ConfigChannel(&TIM2_Handle, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-    {
+    if (HAL_TIM_OC_ConfigChannel(&TIM2_Handle, &sConfigOC, TIM_CHANNEL_2) != HAL_OK) {
         Error_Handler();
     }
     /* USER CODE BEGIN TIM2_Init 2 */
@@ -1005,115 +928,108 @@ void TIM2_Init(void)
   * @param None
   * @retval None
   */
-void TIM3_Init(void)
-{
+void TIM3_Init(void) {
 
-  /* USER CODE BEGIN TIM3_Init 0 */
-  __HAL_RCC_TIM3_CLK_ENABLE();
+    /* USER CODE BEGIN TIM3_Init 0 */
+    __HAL_RCC_TIM3_CLK_ENABLE();
 
-  /* USER CODE END TIM3_Init 0 */
+    /* USER CODE END TIM3_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
+    TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+    TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE BEGIN TIM3_Init 1 */
+    /* USER CODE BEGIN TIM3_Init 1 */
 
-  /* USER CODE END TIM3_Init 1 */
-  TIM3_Handle.Instance = TIM3;
-  TIM3_Handle.Init.Prescaler = 36000; // 72Mhz -> 2khz
-  TIM3_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  TIM3_Handle.Init.Period = 50;
-  TIM3_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  TIM3_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&TIM3_Handle) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&TIM3_Handle, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&TIM3_Handle) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&TIM3_Handle, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&TIM3_Handle, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM3_Init 2 */
+    /* USER CODE END TIM3_Init 1 */
+    TIM3_Handle.Instance = TIM3;
+    TIM3_Handle.Init.Prescaler = 36000; // 72Mhz -> 2khz
+    TIM3_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+    TIM3_Handle.Init.Period = 50;
+    TIM3_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    TIM3_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_Base_Init(&TIM3_Handle) != HAL_OK) {
+        Error_Handler();
+    }
+    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+    if (HAL_TIM_ConfigClockSource(&TIM3_Handle, &sClockSourceConfig) != HAL_OK) {
+        Error_Handler();
+    }
+    if (HAL_TIM_PWM_Init(&TIM3_Handle) != HAL_OK) {
+        Error_Handler();
+    }
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    if (HAL_TIMEx_MasterConfigSynchronization(&TIM3_Handle, &sMasterConfig) != HAL_OK) {
+        Error_Handler();
+    }
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 0;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(&TIM3_Handle, &sConfigOC, TIM_CHANNEL_4) != HAL_OK) {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN TIM3_Init 2 */
 
-  /* USER CODE END TIM3_Init 2 */
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  /**TIM3 GPIO Configuration
-  PB1     ------> TIM3_CH4
-  */
-  GPIO_InitTypeDef GPIO_InitStruct = {0};  
-  GPIO_InitStruct.Pin = GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    /* USER CODE END TIM3_Init 2 */
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    /**TIM3 GPIO Configuration
+    PB1     ------> TIM3_CH4
+    */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 
 /**
   * Enable DMA controller clock
   */
-void MX_DMA_Init(void)
-{
+void MX_DMA_Init(void) {
 
-   /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-  __HAL_RCC_DMA2_CLK_ENABLE();
+    /* DMA controller clock enable */
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    __HAL_RCC_DMA2_CLK_ENABLE();
 
-  /* DMA interrupt init */
+    /* DMA interrupt init */
 /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
-  /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
-  /* DMA1_Channel4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
-  /* DMA1_Channel5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
-  /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
-  /* DMA1_Channel7_IRQn interrupt configuration (DRIVE MOTORS)  */
+    HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+    /* DMA1_Channel2_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+    /* DMA1_Channel3_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+    /* DMA1_Channel4_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+    /* DMA1_Channel5_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
+    /* DMA1_Channel6_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
+    /* DMA1_Channel7_IRQn interrupt configuration (DRIVE MOTORS)  */
 
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
-  /* DMA2_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Channel3_IRQn);
-  /* DMA2_Channel4_5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel4_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Channel4_5_IRQn);
+    HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
+    /* DMA2_Channel3_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA2_Channel3_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Channel3_IRQn);
+    /* DMA2_Channel4_5_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA2_Channel4_5_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Channel4_5_IRQn);
 
-   /* DMA1_Channel2_IRQn interrupt configuration  (BLADE MOTOR)  */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
-  /* DMA1_Channel3_IRQn interrupt configuration (BLADE MOTOR) */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+    /* DMA1_Channel2_IRQn interrupt configuration  (BLADE MOTOR)  */
+    HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+    /* DMA1_Channel3_IRQn interrupt configuration (BLADE MOTOR) */
+    HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
 }
 
@@ -1124,108 +1040,101 @@ void MX_DMA_Init(void)
  * todo PID current measure
  * needs to be called frequently
  */
-void ChargeController(void)
-{                        
-  static CHARGER_STATE_e charger_state = CHARGER_STATE_IDLE;
-  static uint32_t timestamp = 0;
-  charge_voltage =  chargerVoltage;
-  battery_voltage = batteryVoltage;
-  charge_current = current - charge_current_offset.f;
+void ChargeController(void) {
+    static CHARGER_STATE_e charger_state = CHARGER_STATE_IDLE;
+    static uint32_t timestamp = 0;
+    charge_voltage = chargerVoltage;
+    battery_voltage = batteryVoltage;
+    charge_current = current - charge_current_offset.f;
 
-  //DB_TRACE(" charger_state : %d  V : %f \r\n", charger_state,chargerInputVoltage);
-        
-  /*charger disconnected force idle state*/
-  if((chargerInputVoltage < MIN_DOCKED_VOLTAGE) ){
-    charger_state = CHARGER_STATE_IDLE;
-  }
+    //DB_TRACE(" charger_state : %d  V : %f \r\n", charger_state,chargerInputVoltage);
 
-    switch (charger_state)
-    {
-    case CHARGER_STATE_CONNECTED:
-
-        /* when connected the 3.3v and 5v is provided by the charger so we get the real biais of the current measure */
-        chargecontrol_pwm_val = 0;
-
-        /* wait 100ms to read current */
-        if( (HAL_GetTick() - timestamp) > 100){
-            charge_current_offset.f = current;
-          // Writes a data in a RTC Backup data Register 3&4
-          HAL_PWR_EnableBkUpAccess();
-          HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3, charge_current_offset.u[0]);
-          HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR4, charge_current_offset.u[1]);
-          HAL_PWR_DisableBkUpAccess();
-          HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1); /* Power on the battery  Powerbus */
-          charger_state = CHARGER_STATE_CHARGING_CC;
-        }
-
-        break;
-
-    case CHARGER_STATE_CHARGING_CC:
-        // cap charge current at 1.5 Amps
-        if ((charge_current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 50))
-        {
-            chargecontrol_pwm_val--;
-        }
-        if ((charge_current < MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val < 1350))
-        {
-            chargecontrol_pwm_val++;
-        }
-
-        if(charge_voltage >= (LIMIT_VOLTAGE_150MA )){
-            charger_state = CHARGER_STATE_CHARGING_CV;
-        }
-
-        break;
-
-    case CHARGER_STATE_CHARGING_CV:
-            // set PWM to approach 29.4V charge voltage
-        if ((charge_voltage < (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val < 1350))
-            {
-                chargecontrol_pwm_val++;
-            }            
-        if ((charge_voltage > (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val > 50))
-            {
-                chargecontrol_pwm_val--;
-            }
-
-        /* the current is limited to 150ma */
-        if ((charge_current > (MAX_CHARGE_CURRENT/10)))
-            {
-                chargecontrol_pwm_val--;
-            }
-
-        /* battery full ? */
-        if (charge_current < CHARGE_END_LIMIT_CURRENT) {
-          //charger_state = CHARGER_STATE_END_CHARGING;
-          /*consider as the battery full */
-          ampere_acc.f = 2.8;
-          SOC = 100;
-        }
-
-        break;
-
-    case CHARGER_STATE_END_CHARGING:
-
-        chargecontrol_pwm_val = 0;
-
-        break;
-
-
-    case CHARGER_STATE_IDLE:
-    default:
-
-        if (chargerInputVoltage >= 30.0 ) {
-            charger_state = CHARGER_STATE_CONNECTED;
-            HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 0); /* Power off the battery  Powerbus */
-            timestamp = HAL_GetTick();
-             }
-        chargecontrol_pwm_val = 0;
-        break;
+    /*charger disconnected force idle state*/
+    if ((chargerInputVoltage < MIN_DOCKED_VOLTAGE)) {
+        charger_state = CHARGER_STATE_IDLE;
     }
 
-    ampere_acc.f += ((current - charge_current_offset.f)/(100*60*60));
-    if(ampere_acc.f >= 2.8)ampere_acc.f = 2.8;
-    SOC = ampere_acc.f/2.8;
+    switch (charger_state) {
+        case CHARGER_STATE_CONNECTED:
+
+            /* when connected the 3.3v and 5v is provided by the charger so we get the real biais of the current measure */
+            chargecontrol_pwm_val = 0;
+
+            /* wait 100ms to read current */
+            if ((HAL_GetTick() - timestamp) > 100) {
+                charge_current_offset.f = current;
+                // Writes a data in a RTC Backup data Register 3&4
+                HAL_PWR_EnableBkUpAccess();
+                HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3, charge_current_offset.u[0]);
+                HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR4, charge_current_offset.u[1]);
+                HAL_PWR_DisableBkUpAccess();
+                HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1); /* Power on the battery  Powerbus */
+                charger_state = CHARGER_STATE_CHARGING_CC;
+            }
+
+            break;
+
+        case CHARGER_STATE_CHARGING_CC:
+            // cap charge current at 1.5 Amps
+            if ((charge_current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 50)) {
+                chargecontrol_pwm_val--;
+            }
+            if ((charge_current < MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val < 1350)) {
+                chargecontrol_pwm_val++;
+            }
+
+            if (charge_voltage >= (LIMIT_VOLTAGE_150MA)) {
+                charger_state = CHARGER_STATE_CHARGING_CV;
+            }
+
+            break;
+
+        case CHARGER_STATE_CHARGING_CV:
+            // set PWM to approach 29.4V charge voltage
+            if ((charge_voltage < (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val < 1350)) {
+                chargecontrol_pwm_val++;
+            }
+            if ((charge_voltage > (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val > 50)) {
+                chargecontrol_pwm_val--;
+            }
+
+            /* the current is limited to 150ma */
+            if ((charge_current > (MAX_CHARGE_CURRENT / 10))) {
+                chargecontrol_pwm_val--;
+            }
+
+            /* battery full ? */
+            if (charge_current < CHARGE_END_LIMIT_CURRENT) {
+                //charger_state = CHARGER_STATE_END_CHARGING;
+                /*consider as the battery full */
+                ampere_acc.f = 2.8;
+                SOC = 100;
+            }
+
+            break;
+
+        case CHARGER_STATE_END_CHARGING:
+
+            chargecontrol_pwm_val = 0;
+
+            break;
+
+
+        case CHARGER_STATE_IDLE:
+        default:
+
+            if (chargerInputVoltage >= 30.0) {
+                charger_state = CHARGER_STATE_CONNECTED;
+                HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 0); /* Power off the battery  Powerbus */
+                timestamp = HAL_GetTick();
+            }
+            chargecontrol_pwm_val = 0;
+            break;
+    }
+
+    ampere_acc.f += ((current - charge_current_offset.f) / (100 * 60 * 60));
+    if (ampere_acc.f >= 2.8)ampere_acc.f = 2.8;
+    SOC = ampere_acc.f / 2.8;
 
     // Writes a data in a RTC Backup data Register 1
     HAL_PWR_EnableBkUpAccess();
@@ -1236,99 +1145,84 @@ void ChargeController(void)
     chargecontrol_is_charging = charger_state;
 
     /*Check the PWM value for safety */
-    if (chargecontrol_pwm_val > 1350){
+    if (chargecontrol_pwm_val > 1350) {
         chargecontrol_pwm_val = 1350;
-        }
-        TIM1->CCR1 = chargecontrol_pwm_val;  
+    }
+    TIM1->CCR1 = chargecontrol_pwm_val;
 }
 
 /*
  * Update the states for the Emergency, Charge and Low Bat LEDs
  */
-void StatusLEDUpdate(void)
-{
-        if (Emergency_State()) {
-            debug_printf("Emergency !");
-            PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
-        } else {
-            PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_OFF);
-        }
+void StatusLEDUpdate(void) {
+    if (Emergency_State()) {
+        debug_printf("Emergency !");
+        PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
+    } else {
+        PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_OFF);
+    }
 
-        if (chargecontrol_is_charging == 1) //Connected to charger
-        {
-            PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_ON);
-        }
-        else if (chargecontrol_is_charging == 2) //CC mode 1A
-        {
-            PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_FAST);
-        }
-        else if(chargecontrol_is_charging == 3) //CV mode
-        {
-            PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_SLOW);
-        }
-        else{
-            PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_OFF);
-        }
-            
-        // show a lowbat warning if battery voltage drops below LOW_BAT_THRESHOLD ? (random guess, needs more testing or a compare to the stock firmware)            
-        if (battery_voltage <= LOW_CRI_THRESHOLD)
-        {
-            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_FAST); // low
-        }
-        else if (battery_voltage <= LOW_BAT_THRESHOLD)
-        {
-            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_SLOW); // really low
-        }
-        else
-        {
-            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_OFF); // bat ok
-        }                
+    if (chargecontrol_is_charging == 1) //Connected to charger
+    {
+        PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_ON);
+    } else if (chargecontrol_is_charging == 2) //CC mode 1A
+    {
+        PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_FAST);
+    } else if (chargecontrol_is_charging == 3) //CV mode
+    {
+        PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_SLOW);
+    } else {
+        PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_OFF);
+    }
 
-        HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);         // flash LED
+    // show a lowbat warning if battery voltage drops below LOW_BAT_THRESHOLD ? (random guess, needs more testing or a compare to the stock firmware)
+    if (battery_voltage <= LOW_CRI_THRESHOLD) {
+        PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_FAST); // low
+    } else if (battery_voltage <= LOW_BAT_THRESHOLD) {
+        PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_SLOW); // really low
+    } else {
+        PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_OFF); // bat ok
+    }
+
+    HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);         // flash LED
 }
 
 
 /*
  * print hex bytes
  */
-void msgPrint(uint8_t *msg, uint8_t msg_len)
-{
-     int i;
-     debug_printf("msg: ");
-     for (i=0;i<msg_len;i++)
-     {
+void msgPrint(uint8_t *msg, uint8_t msg_len) {
+    int i;
+    debug_printf("msg: ");
+    for (i = 0; i < msg_len; i++) {
         debug_printf(" %02x", msg[i]);
-     }            
-     debug_printf("\r\n");
+    }
+    debug_printf("\r\n");
 }
 
 /*
  * calc crc byte
  */
-uint8_t crcCalc(uint8_t *msg, uint8_t msg_len)
-{
+uint8_t crcCalc(uint8_t *msg, uint8_t msg_len) {
     uint8_t crc = 0x0;
     uint8_t i;
 
-    for (i=0;i<msg_len;i++)
-    {
+    for (i = 0; i < msg_len; i++) {
         crc += msg[i];
     }
-    return(crc);
+    return (crc);
 }
 
 /*
  * 2khz chirps
  */
-void chirp(uint8_t count)
-{    
+void chirp(uint8_t count) {
     uint8_t i;
 
-    for (i=0;i<count;i++)
-    {
-        TIM3_Handle.Instance->CCR4 = 10;   
+    for (i = 0; i < count; i++) {
+        TIM3_Handle.Instance->CCR4 = 10;
         HAL_Delay(100);
-        TIM3_Handle.Instance->CCR4 = 0;  
+        TIM3_Handle.Instance->CCR4 = 0;
         HAL_Delay(50);
     }
 }
@@ -1336,20 +1230,18 @@ void chirp(uint8_t count)
 /*
  * Debug print via MASTER USART
  */
-void vprint(const char *fmt, va_list argp)
-{
-    char string[200];    
-    if(0 < vsprintf(string,fmt,argp)) // build string
+void vprint(const char *fmt, va_list argp) {
+    char string[200];
+    if (0 < vsprintf(string, fmt, argp)) // build string
     {
-        MASTER_Transmit((unsigned char*)string, strlen(string));       
+        MASTER_Transmit((unsigned char *) string, strlen(string));
     }
 }
 
 /*
  * Debug print
  */
-void debug_printf(const char *fmt, ...) 
-{
+void debug_printf(const char *fmt, ...) {
     va_list argp;
     va_start(argp, fmt);
     vprint(fmt, argp);
@@ -1359,88 +1251,85 @@ void debug_printf(const char *fmt, ...)
 /*
  * Send message via MASTER USART (DMA Normal Mode)
  */
-void MASTER_Transmit(uint8_t *buffer, uint8_t len)
-{    
+void MASTER_Transmit(uint8_t *buffer, uint8_t len) {
     // wait until tx buffers are free (send complete)
-    while (master_tx_busy) {  }
-    master_tx_busy = 1;  
+    while (master_tx_busy) {}
+    master_tx_busy = 1;
     // copy into our master_tx_buffer 
     master_tx_buffer_len = len;
     memcpy(master_tx_buffer, buffer, master_tx_buffer_len);
-    HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t*)master_tx_buffer, master_tx_buffer_len); // send message via UART       
+    HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t *) master_tx_buffer,
+                          master_tx_buffer_len); // send message via UART
 }
 
 /*
  * Feed the watchdog every 10ms
  */
-static void WATCHDOG_Refresh(void){
-  /* Update WWDG counter */
-  WwdgHandle.Instance = WWDG;
-  if( HAL_WWDG_Refresh(&WwdgHandle) != HAL_OK )
-  {
-    #ifdef DB_ACTIVE
-      DB_TRACE(" WWDG refresh error\n\r");
-    #endif  /* DB_ACTIVE */
+static void WATCHDOG_Refresh(void) {
+    /* Update WWDG counter */
+    WwdgHandle.Instance = WWDG;
+    if (HAL_WWDG_Refresh(&WwdgHandle) != HAL_OK) {
+#ifdef DB_ACTIVE
+        DB_TRACE(" WWDG refresh error\n\r");
+#endif  /* DB_ACTIVE */
 
-  }
+    }
 
-  /* Reload IWDG counter */
-  IwdgHandle.Instance = IWDG;
-  if( HAL_IWDG_Refresh(&IwdgHandle) != HAL_OK )
-  {
-    #ifdef DB_ACTIVE
-      DB_TRACE(" IWDG refresh error\n\r");
-    #endif  /* DB_ACTIVE */
-  }
+    /* Reload IWDG counter */
+    IwdgHandle.Instance = IWDG;
+    if (HAL_IWDG_Refresh(&IwdgHandle) != HAL_OK) {
+#ifdef DB_ACTIVE
+        DB_TRACE(" IWDG refresh error\n\r");
+#endif  /* DB_ACTIVE */
+    }
 }
 
 
-void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 
-  if(hadc == &ADC2_Handle){
-    uint16_t l_u16Rawdata = ADC2_Handle.Instance->DR;
-    float tmp;
+    if (hadc == &ADC2_Handle) {
+        uint16_t l_u16Rawdata = ADC2_Handle.Instance->DR;
+        float tmp;
 
-    switch (adc2_eChannelSelection)
-    {
-    case ADC2_CHANNEL_CURRENT:
-      tmp = (((float)l_u16Rawdata/4095.0f)*3.3f - 2.5f) * 100/12.0;
-      current = 0.8*tmp+0.2*current;
-      break;
+        switch (adc2_eChannelSelection) {
+            case ADC2_CHANNEL_CURRENT:
+                tmp = (((float) l_u16Rawdata / 4095.0f) * 3.3f - 2.5f) * 100 / 12.0;
+                current = 0.8 * tmp + 0.2 * current;
+                break;
 
-    case ADC2_CHANNEL_CHARGEVOLTAGE:
-      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*16;
-      chargerVoltage = 0.8*tmp+0.2*chargerVoltage;
-      break;
-    
-    case ADC2_CHANNEL_BATTERYVOLTAGE:
-      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
-      batteryVoltage = 0.4*tmp+0.6*batteryVoltage;
-      break;
+            case ADC2_CHANNEL_CHARGEVOLTAGE:
+                tmp = ((float) l_u16Rawdata / 4095.0f) * 3.3f * 16;
+                chargerVoltage = 0.8 * tmp + 0.2 * chargerVoltage;
+                break;
 
-    case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
-      tmp = (l_u16Rawdata/4095.0f)*3.3f * (32/2);
-      chargerInputVoltage = 0.5*tmp+0.5*chargerInputVoltage;
-      break;
+            case ADC2_CHANNEL_BATTERYVOLTAGE:
+                tmp = ((float) l_u16Rawdata / 4095.0f) * 3.3f * 10.09 + 0.6f;
+                batteryVoltage = 0.4 * tmp + 0.6 * batteryVoltage;
+                break;
 
-    case ADC2_CHANNEL_PC2:
-      tmp = (l_u16Rawdata/4095.0f)*3.3f;
-      input_PC3 = 0.5*tmp+0.5*input_PC3;
-      break;
+            case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
+                tmp = (l_u16Rawdata / 4095.0f) * 3.3f * (32 / 2);
+                chargerInputVoltage = 0.5 * tmp + 0.5 * chargerInputVoltage;
+                break;
 
-    case ADC2_CHANNEL_MAX:
-    default:
-      /* should not get here */
-      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
-      batteryVoltage = 0.1*tmp+0.9*batteryVoltage;
-      break;
-  }
+            case ADC2_CHANNEL_PC2:
+                tmp = (l_u16Rawdata / 4095.0f) * 3.3f;
+                input_PC3 = 0.5 * tmp + 0.5 * input_PC3;
+                break;
 
-  adc2_eChannelSelection++;
-  if(adc2_eChannelSelection == ADC2_CHANNEL_MAX)adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
-  adc2_SetChannel(adc2_eChannelSelection);
+            case ADC2_CHANNEL_MAX:
+            default:
+                /* should not get here */
+                tmp = ((float) l_u16Rawdata / 4095.0f) * 3.3f * 10.09 + 0.6f;
+                batteryVoltage = 0.1 * tmp + 0.9 * batteryVoltage;
+                break;
+        }
 
-  HAL_ADC_Start_IT(&ADC2_Handle);
-  }
+        adc2_eChannelSelection++;
+        if (adc2_eChannelSelection == ADC2_CHANNEL_MAX)adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+        adc2_SetChannel(adc2_eChannelSelection);
+
+        HAL_ADC_Start_IT(&ADC2_Handle);
+    }
 
 }

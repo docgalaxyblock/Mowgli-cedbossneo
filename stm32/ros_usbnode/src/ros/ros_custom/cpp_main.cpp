@@ -277,7 +277,7 @@ extern "C" void motors_handler()
 			}
 #ifdef BLADEMOTOR_USART_ENABLED
 			// if the last blade cmd is older than 25sec we stop the motor			
-			if (last_cmd_vel_age > 25 && blade_on_off) {
+			if (last_cmd_vel_age > 30 && blade_on_off) {
 				blade_on_off = 0;
 				BLADEMOTOR_Set(0);			
 			}			
@@ -347,7 +347,8 @@ extern "C" void broadcast_handler()
 		////////////////////////////////////////
 		// IMU Messages
 		////////////////////////////////////////		
-		imu_msg.header.frame_id = "imu";
+		imu_msg.header.seq++;
+		imu_msg.header.frame_id = "base_link";
 		
 		// No Orientation in IMU message
 		imu_msg.orientation.x = 0;
@@ -445,6 +446,9 @@ extern "C" void broadcast_handler()
 		} else {
 			om_mower_status_msg.v_charge = 0.0;
 		}
+		om_mower_status_msg.esc_power = true;
+		om_mower_status_msg.raspberry_pi_power = true;
+		om_mower_status_msg.gps_power = true;
 		om_mower_status_msg.charge_current = charge_current;
 		om_mower_status_msg.v_battery = battery_voltage;
 		om_mower_status_msg.left_esc_status.current = left_power;
