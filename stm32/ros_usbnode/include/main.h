@@ -69,15 +69,9 @@ typedef enum {
 #define DB_TRACE(...)\
             do { if (DB_ACTIVE) debug_printf( __VA_ARGS__); } while (0)
 
-void ADC_Test();
-float ADC_BatteryVoltage(uint8_t adc_conversions);
-float ADC_ChargeVoltage(uint8_t adc_conversions);
-float ADC_ChargeCurrent(uint8_t adc_conversions);
 void ChargeController(void);
 void EmergencyController(void);
 void StatusLEDUpdate(void);
-void setDriveMotors(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir);
-void setBladeMotor(uint8_t on_off);
 uint8_t crcCalc(uint8_t *msg, uint8_t msg_len);
 void msgPrint(uint8_t *msg, uint8_t msg_len);
 void chirp(uint8_t count);
@@ -107,16 +101,12 @@ void Error_Handler(void);
 void LED_Init();
 void TF4_Init();
 void RAIN_Sensor_Init();
-void PAC5210RESET_Init();
 void MASTER_USART_Init();
-void DRIVEMOTORS_USART_Init();
-void BLADEMOTOR_USART_Init();
 void SystemClock_Config();
 void ADC2_Init(void);
 void TIM1_Init(void);
 void TIM2_Init(void);
 void TIM3_Init(void);
-void TIM4_Init(void);
 void MX_DMA_Init(void);
 void Emergency_Init(void);
 void SPI3_Init();
@@ -129,8 +119,6 @@ void DRIVEMOTORS_Transmit(uint8_t *buffer, uint8_t len);
 
 // Sensor Wrapper functions
 int RAIN_Sense(void);
-int HALLSTOP_Left_Sense(void);
-int HALLSTOP_Right_Sense(void);
 
 void debug_printf(const char *fmt, ...);
 

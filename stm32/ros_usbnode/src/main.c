@@ -111,7 +111,7 @@ typedef enum
 } ADC2_channelSelection_e;
 ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
 void adc2_SetChannel(ADC2_channelSelection_e channel);
-
+void ADC2_Init();
 TIM_HandleTypeDef TIM1_Handle; // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle; // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle; // PWM Beeper
@@ -193,8 +193,6 @@ int main(void)
   DB_TRACE(" * ADC1 initialized\r\n");
   TIM3_Init();
   HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);
-  TIM4_Init();
-  HAL_TIM_PWM_Start(&TIM4_Handle, TIM_CHANNEL_3);
   DB_TRACE(" * Timer3 (Beeper) initialized\r\n");
   TF4_Init();
   DB_TRACE(" * 24V switched on\r\n");
@@ -452,47 +450,6 @@ void RAIN_Sensor_Init()
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
   HAL_GPIO_Init(RAIN_SENSOR_PORT, &GPIO_InitStruct);
-}
-
-/**
- * @brief Init HALL STOP Sensor (PD2&3) Inputs
- * @retval None
- */
-void HALLSTOP_Sensor_Init()
-{
-  HALLSTOP_GPIO_CLK_ENABLE();
-  GPIO_InitTypeDef GPIO_InitStruct;
-  GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-  HAL_GPIO_Init(HALLSTOP_PORT, &GPIO_InitStruct);
-}
-
-/**
- * @brief Poll HALLSTOP_Left_Sense Sensor
- * @retval  1 if trigger , 0 if no stop sensor trigger
- */
-int HALLSTOP_Left_Sense(void)
-{
-#if OPTION_BUMPER == 1
-  return (HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_2));
-#else
-  return 0;
-#endif
-}
-
-/**
- * @brief Poll HALLSTOP_Right_Sense
- * @retval 1 if trigger , 0 if no stop sensor trigger
- */
-int HALLSTOP_Right_Sense(void)
-{
-#if OPTION_BUMPER == 1
-  return (HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_3));
-#else
-  return 0;
-#endif
 }
 
 /**
@@ -1009,69 +966,6 @@ void TIM3_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-}
-
-/**
- * @brief TIM4 Initialization Function
- *
- * Buzzer is on PD14 (PWM)
- *
- * @param None
- * @retval None
- */
-void TIM4_Init(void)
-{
-  __HAL_RCC_TIM4_CLK_ENABLE();
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  TIM4_Handle.Instance = TIM4;
-  TIM4_Handle.Init.Prescaler = 36000; // 72Mhz -> 2khz
-  TIM4_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  TIM4_Handle.Init.Period = 50;
-  TIM4_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  TIM4_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&TIM4_Handle) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&TIM4_Handle, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&TIM4_Handle) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&TIM4_Handle, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&TIM4_Handle, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  __HAL_AFIO_REMAP_TIM4_ENABLE(); // to use PD14 it is a full remap
-
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  /**TIM4 GPIO Configuration
-  PD14    ------> TIM4_CH3
-  */
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_InitStruct.Pin = GPIO_PIN_14;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 }
 
 /**

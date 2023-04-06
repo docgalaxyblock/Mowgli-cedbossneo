@@ -92,8 +92,6 @@ void PANEL_Tick(void);
 void PANEL_Set_LED(uint8_t led, PANEL_LED_STATE state);
 int PANEL_Get_Key_Pressed(void);
 
-void PANEL_ReceiceIT(void);
-
 void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command);
 
 extern uint16_t buttonstate[PANEL_BUTTON_BYTES];
