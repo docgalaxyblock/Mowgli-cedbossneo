@@ -229,7 +229,6 @@ extern "C" void chatter_handler()
 		  imu_onboard_temp_msg.header.frame_id = base_link;
 		  pubIMUOnboardTemp.publish(&imu_onboard_temp_msg);
 */
-		  HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);         // flash LED
 
 		  // reboot if set via cbReboot (mowgli/Reboot)
 		  if (reboot_flag)
@@ -316,6 +315,10 @@ extern "C" void wheelTicks_handler(int8_t p_u8LeftDirection,int8_t p_u8RightDire
     wheel_ticks_msg.stamp = nh.now();
     wheel_ticks_msg.wheel_tick_factor = TICKS_PER_M;
     wheel_ticks_msg.valid_wheels = 0x0C;
+	wheel_ticks_msg.wheel_direction_fl = 0;
+	wheel_ticks_msg.wheel_ticks_fl = (int32_t)p_s16LeftSpeed;
+	wheel_ticks_msg.wheel_direction_fr = 0;
+	wheel_ticks_msg.wheel_ticks_fr = (int32_t)p_s16RightSpeed;
     wheel_ticks_msg.wheel_direction_rl = (p_u8LeftDirection == -1)? 1 : 0;
     wheel_ticks_msg.wheel_ticks_rl = p_u16LeftTicks;
     wheel_ticks_msg.wheel_direction_rr = (p_u8RightDirection == -1)? 1 : 0;;
