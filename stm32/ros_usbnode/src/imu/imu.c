@@ -195,7 +195,7 @@ void IMU_Calibrate()
     sum_x = sum_y = sum_z = 0;
     for (i=0; i<IMU_CAL_SAMPLES; i++)
     {
-      IMU_ReadAccelerometerRaw(&imu_sample_x[i], &imu_sample_y[i], &imu_sample_z[i]);
+      IMU_ReadAccelerometer(&imu_sample_x[i], &imu_sample_y[i], &imu_sample_z[i]);
         sum_x += imu_sample_x[i];
       sum_y += imu_sample_y[i];
       sum_z += imu_sample_z[i];
@@ -206,7 +206,7 @@ void IMU_Calibrate()
     mean_z = sum_z / IMU_CAL_SAMPLES;
     imu_cal_ax = mean_x;
     imu_cal_ay = mean_y;
-    imu_cal_az = 0;    // we dont want to calibrate Z because our IMU Sensor fusion stack expects gravity
+    imu_cal_az = mean_z;    // we dont want to calibrate Z because our IMU Sensor fusion stack expects gravity
     debug_printf("   >> External IMU Calibration factors accelerometer [%f %f %f]\r\n", imu_cal_ax, imu_cal_ay, imu_cal_az);
     stddev_x = stddev_y = stddev_z = 0;
     for (i=0; i<IMU_CAL_SAMPLES; i++)
@@ -226,7 +226,7 @@ void IMU_Calibrate()
     sum_x = sum_y = sum_z = 0;    
     for (i=0; i<IMU_CAL_SAMPLES; i++)
     {
-      IMU_ReadGyroRaw(&imu_sample_x[i], &imu_sample_y[i], &imu_sample_z[i]);
+      IMU_ReadGyro(&imu_sample_x[i], &imu_sample_y[i], &imu_sample_z[i]);
       sum_x += imu_sample_x[i];
       sum_y += imu_sample_y[i];
       sum_z += imu_sample_z[i];

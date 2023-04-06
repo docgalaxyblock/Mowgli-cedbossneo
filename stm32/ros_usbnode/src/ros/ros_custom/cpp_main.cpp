@@ -332,6 +332,7 @@ extern "C" void broadcast_handler()
 		// IMU Messages
 		////////////////////////////////////////		
 		imu_msg.header.seq++;
+		imu_msg.header.stamp = nh.now();
 		imu_msg.header.frame_id = "base_link";
 		
 		/**********************************/
@@ -339,7 +340,7 @@ extern "C" void broadcast_handler()
 		/**********************************/
 #ifdef IMU_ACCELERATION
 		// Linear acceleration		
-		IMU_ReadAccelerometerRaw(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);		
+		IMU_ReadAccelerometer(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);		
 //		IMU_AccelerometerSetCovariance(imu_msg.linear_acceleration_covariance);	
 #else
 		imu_msg.linear_acceleration.x = imu_msg.linear_acceleration.y = imu_msg.linear_acceleration.z = 0;		
@@ -351,13 +352,12 @@ extern "C" void broadcast_handler()
 		/**********************************/
 #ifdef IMU_ANGULAR
 		// Angular velocity
-		IMU_ReadGyroRaw(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
+		IMU_ReadGyro(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
 		//IMU_GyroSetCovariance(imu_msg.angular_velocity_covariance);	
 #else
 		imu_msg.angular_velocity.x = imu_msg.angular_velocity.y = imu_msg.angular_velocity.z = 0;		
 		imu_msg.angular_velocity_covariance[0] = -1;
 #endif		
-		imu_msg.header.stamp = nh.now();
 		pubIMU.publish(&imu_msg);
 	} // if (NBT_handler(&imu_nbt))
 
