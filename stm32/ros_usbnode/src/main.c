@@ -249,6 +249,7 @@ int main(void)
 #endif
 #ifdef BLADEMOTOR_USART_ENABLED
   BLADEMOTOR_Init();
+  DB_TRACE(" * Blade Motor USART initialized\r\n");
 #endif
 
   HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);

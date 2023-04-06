@@ -93,7 +93,6 @@ float imu_onboard_temperature; // cached temp value, so we dont poll I2C constan
 // IMU
 // external IMU (i2c)
 sensor_msgs::Imu imu_msg;
-sensor_msgs::MagneticField imu_mag_msg;
 // onboard IMU (accelerometer and temp)
 sensor_msgs::Imu imu_onboard_msg;
 //sensor_msgs::Temperature imu_onboard_temp_msg;
@@ -332,22 +331,16 @@ extern "C" void broadcast_handler()
 		////////////////////////////////////////
 		// IMU Messages
 		////////////////////////////////////////		
-		imu_msg.header.frame_id = "imu";
+		imu_msg.header.seq++;
+		imu_msg.header.frame_id = "base_link";
 		
-		// No Orientation in IMU message
-		imu_msg.orientation.x = 0;
-		imu_msg.orientation.y = 0;
-		imu_msg.orientation.z = 0;
-		imu_msg.orientation.w = 0;
-		imu_msg.orientation_covariance[0] = -1;
-
 		/**********************************/
 		/* Exernal Accelerometer 		  */
 		/**********************************/
 #ifdef IMU_ACCELERATION
 		// Linear acceleration		
-		IMU_ReadAccelerometer(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);		
-		IMU_AccelerometerSetCovariance(imu_msg.linear_acceleration_covariance);	
+		IMU_ReadAccelerometerRaw(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);		
+//		IMU_AccelerometerSetCovariance(imu_msg.linear_acceleration_covariance);	
 #else
 		imu_msg.linear_acceleration.x = imu_msg.linear_acceleration.y = imu_msg.linear_acceleration.z = 0;		
 		imu_msg.linear_acceleration_covariance[0] = -1;
@@ -358,8 +351,8 @@ extern "C" void broadcast_handler()
 		/**********************************/
 #ifdef IMU_ANGULAR
 		// Angular velocity
-		IMU_ReadGyro(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
-		IMU_GyroSetCovariance(imu_msg.angular_velocity_covariance);	
+		IMU_ReadGyroRaw(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
+		//IMU_GyroSetCovariance(imu_msg.angular_velocity_covariance);	
 #else
 		imu_msg.angular_velocity.x = imu_msg.angular_velocity.y = imu_msg.angular_velocity.z = 0;		
 		imu_msg.angular_velocity_covariance[0] = -1;
@@ -370,38 +363,6 @@ extern "C" void broadcast_handler()
 
   	  if (NBT_handler(&status_nbt))
 	  {
-		////////////////////////////////////////
-		// mowgli/status Message
-		////////////////////////////////////////		
-		/*status_msg.stamp = nh.now();
-		status_msg.rain_detected = RAIN_Sense();
-        status_msg.emergency_status = Emergency_State();
-		status_msg.emergency_tilt_mech_triggered = Emergency_Tilt();
-		status_msg.emergency_tilt_accel_triggered = Emergency_LowZAccelerometer();
-		status_msg.emergency_left_wheel_lifted = Emergency_WheelLiftBlue();
-		status_msg.emergency_right_wheel_lifted = Emergency_WheelLiftRed();
-		status_msg.emergency_stopbutton_triggered = Emergency_StopButtonYellow() || Emergency_StopButtonWhite();
-		status_msg.left_encoder_ticks = left_encoder_ticks;
-		status_msg.right_encoder_ticks = right_encoder_ticks;
-		status_msg.v_charge = charge_voltage;
-		status_msg.i_charge = charge_current;
-		status_msg.v_battery = battery_voltage;
-		status_msg.charge_pwm = chargecontrol_pwm_val;
-		status_msg.is_charging = chargecontrol_is_charging;
-		status_msg.imu_temp = imu_onboard_temperature;
-	    status_msg.blade_motor_ctrl_enabled = blade_on_off;
-		status_msg.drive_motor_ctrl_enabled = true; // hardcoded for now
-		status_msg.blade_motor_enabled = BLADEMOTOR_bActivated;	// set by feedback from blademotor	
-		status_msg.left_power = left_power;	
-		status_msg.right_power = right_power; 
-    	status_msg.blade_power = BLADEMOTOR_u16Power;
-	    status_msg.blade_RPM = BLADEMOTOR_u16RPM;
-	    status_msg.blade_temperature = blade_temperature;
-		status_msg.sw_ver_maj = MOWGLI_SW_VERSION_MAJOR;
-		status_msg.sw_ver_bra = MOWGLI_SW_VERSION_BRANCH;
-		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;*/
-		//pubStatus.publish(&status_msg);		
-
 		om_mower_status_msg.mower_status = mower_msgs::Status::MOWER_STATUS_OK;
 		om_mower_status_msg.rain_detected = RAIN_Sense();
 		om_mower_status_msg.emergency = Emergency_State();
@@ -411,6 +372,9 @@ extern "C" void broadcast_handler()
 		} else {
 			om_mower_status_msg.v_charge = 0.0;
 		}
+		om_mower_status_msg.esc_power = mower_msgs::Status::MOWER_STATUS_OK;
+		om_mower_status_msg.raspberry_pi_power = mower_msgs::Status::MOWER_STATUS_OK;
+		om_mower_status_msg.gps_power = mower_msgs::Status::MOWER_STATUS_OK;
 		om_mower_status_msg.charge_current = charge_current;
 		om_mower_status_msg.v_battery = battery_voltage;
 		om_mower_status_msg.left_esc_status.current = left_power;
