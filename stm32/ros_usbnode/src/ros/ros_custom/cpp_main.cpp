@@ -310,20 +310,15 @@ extern "C" void panel_handler()
 * \brief Send wheelt tick to openmower by rosserial
 * is called when receiving the motors unit answer (every 20ms)
 */
-extern "C" void wheelTicks_handler(int8_t p_u8LeftDirection,int8_t p_u8RightDirection, uint32_t p_u16LeftTicks, uint32_t p_u16RightTicks, int16_t p_s16LeftSpeed, int16_t p_s16RightSpeed){
+extern "C" void wheelTicks_handler(uint8_t p_u8LeftDirection,uint8_t p_u8RightDirection, uint32_t p_u16LeftTicks, uint32_t p_u16RightTicks, uint32_t p_s16LeftSpeed, uint32_t p_s16RightSpeed){
 
     wheel_ticks_msg.stamp = nh.now();
     wheel_ticks_msg.wheel_tick_factor = TICKS_PER_M;
     wheel_ticks_msg.valid_wheels = 0x0C;
-	wheel_ticks_msg.wheel_direction_fl = 0;
-	wheel_ticks_msg.wheel_ticks_fl = (int32_t)p_s16LeftSpeed;
-	wheel_ticks_msg.wheel_direction_fr = 0;
-	wheel_ticks_msg.wheel_ticks_fr = (int32_t)p_s16RightSpeed;
-    wheel_ticks_msg.wheel_direction_rl = (p_u8LeftDirection == -1)? 1 : 0;
+    wheel_ticks_msg.wheel_direction_rl = p_u8LeftDirection;
     wheel_ticks_msg.wheel_ticks_rl = p_u16LeftTicks;
-    wheel_ticks_msg.wheel_direction_rr = (p_u8RightDirection == -1)? 1 : 0;;
+    wheel_ticks_msg.wheel_direction_rr = p_u8RightDirection;
     wheel_ticks_msg.wheel_ticks_rr = p_u16RightTicks;
-
     pubWheelTicks.publish(&wheel_ticks_msg);
 }
 

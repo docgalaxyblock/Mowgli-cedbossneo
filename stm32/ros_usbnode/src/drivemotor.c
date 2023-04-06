@@ -338,7 +338,7 @@ void DRIVEMOTOR_App_Rx(void){
             {
                 prev_left_encoder_val = 0;
             }
-            left_encoder_ticks +=  abs(left_direction)* (left_encoder_val - prev_left_encoder_val);
+            left_encoder_ticks +=  abs(left_direction* (left_encoder_val - prev_left_encoder_val));
             prev_left_encoder_val = left_encoder_val;
             prev_left_wheel_speed_val = left_wheel_speed_val;
             prev_left_direction = left_direction;
@@ -348,12 +348,12 @@ void DRIVEMOTOR_App_Rx(void){
             {
                 prev_right_encoder_val = 0;
             }
-            right_encoder_ticks +=  abs(right_direction)*(right_encoder_val - prev_right_encoder_val);
+            right_encoder_ticks +=  abs(right_direction*(right_encoder_val - prev_right_encoder_val));
             prev_right_encoder_val = right_encoder_val;
             prev_right_wheel_speed_val = right_wheel_speed_val;
             prev_right_direction = right_direction;
             
-            wheelTicks_handler(left_direction, right_direction, left_encoder_ticks, right_encoder_ticks, left_wheel_speed_val, right_wheel_speed_val);
+            wheelTicks_handler((left_direction == -1)? 1 : 0, (right_direction == -1)? 1 : 0, left_encoder_ticks, right_encoder_ticks, left_wheel_speed_val, right_wheel_speed_val);
 
             drivemotors_eRxFlag = RX_WAIT;                    // ready for next message
     }
