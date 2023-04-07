@@ -225,7 +225,7 @@ int main(void)
   DB_TRACE(" * Testing supported IMUs:\r\n");
   IMU_TestDevice();
   IMU_Init();
-  IMU_Calibrate();
+  //IMU_Calibrate();
   Emergency_Init();
   DB_TRACE(" * Emergency sensors initialized\r\n");
   TIM1_Init();

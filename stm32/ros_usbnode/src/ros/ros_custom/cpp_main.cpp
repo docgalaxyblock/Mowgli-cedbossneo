@@ -338,7 +338,7 @@ extern "C" void broadcast_handler()
 		/**********************************/
 #ifdef IMU_ACCELERATION
 		// Linear acceleration		
-		IMU_ReadAccelerometer(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);		
+		IMU_ReadAccelerometerRaw(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);		
 //		IMU_AccelerometerSetCovariance(imu_msg.linear_acceleration_covariance);	
 #else
 		imu_msg.linear_acceleration.x = imu_msg.linear_acceleration.y = imu_msg.linear_acceleration.z = 0;		
@@ -350,7 +350,7 @@ extern "C" void broadcast_handler()
 		/**********************************/
 #ifdef IMU_ANGULAR
 		// Angular velocity
-		IMU_ReadGyro(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
+		IMU_ReadGyroRaw(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
 		//IMU_GyroSetCovariance(imu_msg.angular_velocity_covariance);	
 #else
 		imu_msg.angular_velocity.x = imu_msg.angular_velocity.y = imu_msg.angular_velocity.z = 0;		
